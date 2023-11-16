@@ -130,9 +130,3 @@ def get_job_id(s):
         return int(re.search("Submitted batch job ([0-9]+)", s).group(1))
     except Exception:
         return None
-
-
-if __name__ == "__main__":
-    jobs = [Job(cmd="sbatch dummy.sbatch", check_interval_secs=2, termination_str="YES") for _ in range(2)]
-    manage_jobs_forever(jobs)
-    

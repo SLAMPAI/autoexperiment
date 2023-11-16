@@ -1,19 +1,26 @@
 """Console script for autoexperiment."""
-import argparse
+from clize import run
 import sys
+import os
+from autoexperiment.template import generate_job_defs
+from autoexperiment.manager import manage_jobs_forever
 
 
 def main():
-    """Console script for autoexperiment."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument('_', nargs='*')
-    args = parser.parse_args()
+    run(launch)
 
-    print("Arguments: " + str(args._))
-    print("Replace this message by putting your code into "
-          "autoexperiment.cli.main")
+def launch(config):
+    if not config:
+         print("Please specify a config file")
+         return 1
+    jobdefs = generate_job_defs(config)
+    for jobdef in jobdefs:
+       with open(f"{jobdef.sbatch_script}", "w") as f:
+          f.write(jobdef.config)
+       os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
+    manage_jobs_forever(jobdefs)
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())  # pragma: no cover
+    sys.exit(run(main))  # pragma: no cover

@@ -7,18 +7,6 @@ import asyncio
 
 cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
-
-
-@dataclass
-class Job:
-    cmd: str
-    output_file_template: str = "slurm-{job_id}.out"
-    check_interval_secs: int = 60*15
-    start_condition: str = ""
-    termination_str: str = ""
-    verbose: bool = True
-    resume_job_id: int = None
-
    
 def manage_jobs_forever(jobs):
     loop = asyncio.get_event_loop()
@@ -26,14 +14,17 @@ def manage_jobs_forever(jobs):
 
 async def manage_job(job):
     cmd = job.cmd
-    output_file_template = job.output_file_template
+    output_file = job.output_file
     check_interval_secs = job.check_interval_secs
     start_condition = job.start_condition
     termination_str = job.termination_str
     verbose = job.verbose
-    resume_job_id = job.resume_job_id
+    job_ids = re.findall(job.job_id_regexp, output_file)
+    if len(job_ids) > 0:
+        resume_job_id = int(job_ids[-1])
+    else:
+        resume_job_id = None
     while True:
-
         if start_condition:
             if verbose:
                 print("Checking start condition...")
@@ -42,16 +33,21 @@ async def manage_job(job):
                     print(f"Start condition returned 0, not starting, retrying again in {check_interval_secs//60} mins.")
                 await asyncio.sleep(check_interval_secs)
                 continue
-
-        if verbose:
-            print("Launch a new job")
-            print(cmd)
+        if check_if_done(output_file, termination_str):
+            if verbose:
+                print("Termination string found, finishing")
+            return
         if resume_job_id is not None:
+            if verbose:
+                print(f"Resume from job id: {resume_job_id}")
             job_id = resume_job_id
             resume_job_id = None
         else:
             # launch job
             output = check_output(cmd, shell=True).decode()
+            if verbose:
+                print("Launch a new job")
+                print(cmd)
             # get job id
             job_id = get_job_id(output)
             if job_id is None:
@@ -63,7 +59,7 @@ async def manage_job(job):
                 continue
 
         if verbose:
-            print("Current job ID:", job_id)
+            print("Current job id:", job_id)
         while True:
             # Infinite-loop, check each `check_interval_secs` whether job is present
             # in the queue, then, if present in the queue check if it is still running
@@ -77,7 +73,7 @@ async def manage_job(job):
                 # In this case, we wait and relaunch, except if termination string is found
                 if verbose:
                     print(ex)
-                if check_if_done(output_file_template.format(job_id=job_id), termination_str):
+                if check_if_done(output_file, termination_str):
                     if verbose:
                         print("Termination string found, finishing")
                     return
@@ -87,7 +83,7 @@ async def manage_job(job):
                 break
             # if job is not present in the queue, relaunch it directly, except if termination string is found
             if str(job_id) not in data:
-                if check_if_done(output_file_template.format(job_id=job_id), termination_str):
+                if check_if_done(output_file, termination_str):
                     if verbose:
                         print("Termination string found, finishing")
                     return
@@ -96,7 +92,6 @@ async def manage_job(job):
             data = check_output(cmd_check_job_running.format(job_id=job_id), shell=True).decode()
             if str(job_id) in data:
                 # job on running state
-                output_file = output_file_template.format(job_id=job_id)
                 if not os.path.exists(output_file):
                     if verbose:
                         print("Output file not found, waiting...")

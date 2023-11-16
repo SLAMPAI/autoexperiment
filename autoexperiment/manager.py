@@ -19,11 +19,12 @@ async def manage_job(job):
     start_condition = job.start_condition
     termination_str = job.termination_str
     verbose = job.verbose
-    job_ids = re.findall(job.job_id_regexp, output_file)
-    if len(job_ids) > 0:
-        resume_job_id = int(job_ids[-1])
+    if os.path.exists(output_file):
+        job_ids = re.findall(job.job_id_regexp, open(output_file).read())
+        resume_job_id = int(job_ids[-1]) if len(job_ids) > 0 else None
     else:
         resume_job_id = None
+    
     while True:
         if start_condition:
             if verbose:
@@ -35,31 +36,29 @@ async def manage_job(job):
                 continue
         if check_if_done(output_file, termination_str):
             if verbose:
-                print("Termination string found, finishing")
+                print(f"Termination string found for {job.name}, finishing")
             return
         if resume_job_id is not None:
             if verbose:
-                print(f"Resume from job id: {resume_job_id}")
+                print(f"Resume {job.name} from job id: {resume_job_id}")
             job_id = resume_job_id
             resume_job_id = None
         else:
             # launch job
             output = check_output(cmd, shell=True).decode()
             if verbose:
-                print("Launch a new job")
-                print(cmd)
+                print(f"Launch a new job for {job.name}")
             # get job id
             job_id = get_job_id(output)
             if job_id is None:
                 if verbose:
-                    print("Cannot find job id in:")
-                    print('"'+output+'"')
+                    print("Cannot find job id in: {output} for {job.name}")
                     print(f"Retrying again in {check_interval_secs//60} mins...")
                 await asyncio.sleep(check_interval_secs)
                 continue
 
         if verbose:
-            print("Current job id:", job_id)
+            print(f"Current job id for {job.name}: {job_id}")
         while True:
             # Infinite-loop, check each `check_interval_secs` whether job is present
             # in the queue, then, if present in the queue check if it is still running
@@ -75,17 +74,17 @@ async def manage_job(job):
                     print(ex)
                 if check_if_done(output_file, termination_str):
                     if verbose:
-                        print("Termination string found, finishing")
+                        print(f"Termination string found for {job.name}, finishing")
                     return
                 if verbose:
-                    print(f"Retrying again in {check_interval_secs//60} mins...")
+                    print(f"Retrying again in {check_interval_secs//60} mins for {job.name}...")
                 await asyncio.sleep(check_interval_secs)
                 break
             # if job is not present in the queue, relaunch it directly, except if termination string is found
             if str(job_id) not in data:
                 if check_if_done(output_file, termination_str):
                     if verbose:
-                        print("Termination string found, finishing")
+                        print(f"Termination string found for {job.name}, finishing")
                     return
                 break
             # Check first if job is specifically on a running state (to avoid the case where it is on pending state etc)
@@ -94,11 +93,11 @@ async def manage_job(job):
                 # job on running state
                 if not os.path.exists(output_file):
                     if verbose:
-                        print("Output file not found, waiting...")
+                        print(f"Output file not found for {job.name}, waiting...")
                     await asyncio.sleep(check_interval_secs)
                     continue
                 if verbose:
-                    print("Check if the job is freezing...")
+                    print(f"Check if the job is freezing for {job.name}...")
                 # if job is on running state, check the output file
                 output_data_prev = get_file_content(output_file)
                 # wait few minutes
@@ -110,7 +109,7 @@ async def manage_job(job):
                 # (make sure there are is output before checking)
                 if output_data and output_data_prev and output_data == output_data_prev:
                     if verbose:
-                        print("Job frozen, stopping the job then restarting it")
+                        print(f"Job frozen for {job.name}, stopping the job then restarting it")
                     call(f"scancel {job_id}", shell=True)
                     break
             else:

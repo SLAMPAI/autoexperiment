@@ -97,6 +97,11 @@ async def manage_job(job):
             if str(job_id) in data:
                 # job on running state
                 output_file = output_file_template.format(job_id=job_id)
+                if not os.path.exists(output_file):
+                    if verbose:
+                        print("Output file not found, waiting...")
+                    await asyncio.sleep(check_interval_secs)
+                    continue
                 if verbose:
                     print("Check if the job is freezing...")
                 # if job is on running state, check the output file

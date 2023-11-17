@@ -1,4 +1,5 @@
-from autoexperiment.manager import manage_jobs_forever, Job
+from autoexperiment.manager import manage_jobs_forever
+from autoexperiment.template import JobDef
 
 dummy="""#!/bin/bash -x
 #SBATCH --account=cstdl
@@ -13,6 +14,12 @@ with open("dummy.sbatch", "w") as fd:
 
 nb_jobs = 3
 jobs = [
-    Job(cmd=f"sbatch dummy.sbatch {i}", check_interval_secs=2, termination_str="FINISHED JOB") for i in range(nb_jobs)
+    JobDef(
+        cmd=f"sbatch --output slurm_{i}.out dummy.sbatch {i}",
+        output_file=f"slurm_{i}.out",
+        check_interval_secs=2, 
+        termination_str="FINISHED JOB", name=f"Job {i}"
+    ) 
+    for i in range(nb_jobs)
 ]
 manage_jobs_forever(jobs)

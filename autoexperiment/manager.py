@@ -9,10 +9,16 @@ cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
    
 def manage_jobs_forever(jobs):
+    """
+    Manage a list of jobs forever, relaunching them if they are frozen or not running anymore.
+    """
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(*[manage_job(job) for job in jobs]))
 
 async def manage_job(job):
+    """
+    Manage a single job, relaunching it if it is frozen or not running anymore.
+    """
     cmd = job.cmd
     output_file = job.output_file
     check_interval_secs = job.check_interval_secs
@@ -20,6 +26,8 @@ async def manage_job(job):
     termination_str = job.termination_str
     verbose = job.verbose
     if os.path.exists(output_file):
+        # look for job id from the output file
+        # if exists, then resume from this job id
         job_ids = re.findall(job.job_id_regexp, open(output_file).read())
         resume_job_id = int(job_ids[-1]) if len(job_ids) > 0 else None
     else:
@@ -27,11 +35,14 @@ async def manage_job(job):
     
     while True:
         if start_condition:
+            # if start condition is provided, check it first by running it in a shell
+            # if it outputs 0 (false), do not start the job and wait and check again, 
+            # otherwise, start the job
             if verbose:
                 print("Checking start condition...")
             if int(check_output(start_condition, shell=True)) == 0:
                 if verbose:
-                    print(f"Start condition returned 0, not starting, retrying again in {check_interval_secs//60} mins.")
+                    print(f"Start condition returned 0, not starting for {job.name}, retrying again in {check_interval_secs//60} mins.")
                 await asyncio.sleep(check_interval_secs)
                 continue
         if check_if_done(output_file, termination_str):

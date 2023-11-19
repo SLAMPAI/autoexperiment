@@ -29,6 +29,11 @@ class JobDef:
  
 
 def generate_job_defs(path, exp_name=None):
+   """
+   Returns a list of JobDef from a config file (config.yaml)
+   the JobDef list can directly be used by the manager to schedule/manage the jobs
+   """
+   
    cfg = OmegaConf.load(path)
    defs = cfg.defs
    jobs = []
@@ -121,6 +126,7 @@ def generate_job_defs(path, exp_name=None):
             setattr(jobdef, k, str(v).format(**params) if type(v) == str else v)
          jobs.append(jobdef)
    return jobs
+
 
 def _auto_name(params):
     name = ""

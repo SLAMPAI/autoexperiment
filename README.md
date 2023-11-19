@@ -67,7 +67,9 @@ defs:
   # e.g. if we define a 'datacomp' section, and use it in defining experiments (below),
   # all the values defined under take their corresponding value, e.g. `train_data` 
   # will be replacedby "/path/{0000000..0139827}.tar" in the sbatch template file.
-  # Here, we have only 'train_data', but we can have a list of variables.
+  # Here, we have only 'train_data' for datacomp/laion2b, but we can have a list of 
+  # variables. For instance, in s32/m32, we define both `model` and `batch_size`,
+  # as the maximum local batch size depend on the model size.
 
   datacomp:
     train_data: "/path/{0000000..0139827}.tar"

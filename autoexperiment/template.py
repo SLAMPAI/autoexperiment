@@ -96,10 +96,10 @@ def generate_job_defs(path, exp_name=None):
             else:
                params[k] = str(v)
          
-         # the values in 'params' support dependency to other variables via
-         # {NAME}. Thus, we iterate over all the variables and use the str format
-         # to replace all the variables with their values. We do this until
-         # no more {NAME} are found.
+         # the values in 'params' support dependency to other variables by using
+         # {NAME} in the str, where NAME is the key of the param. 
+         # Thus, we iterate over all the variables and replace all the variables with their values. 
+         # We do this until no more {NAME} in the values of all the params are found.
          while True:
             old_params = params.copy()
             for k, v in params.items():

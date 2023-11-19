@@ -92,13 +92,18 @@ common:
   # 3 - to find if the termination string (`termination_str`) appeared, this is used to stop restarting the jobs forever (remember that we have a max time limit in SLURM, so we restart the job as much as needed until we find the `termination_str`)
   output_file: "{logs}/{name}/slurm.out"
   
+  # it is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to display
+  # the SLURM job id (see explanation above), here we define the regexp used to find the SLURM job id.
   job_id_regexp: "Job Id:(\\d+)"
+  # it is IMPORTANT to define the `termination_str`, it is a regexp used to detect if a job is finished,
+  # otherwise, it will be restarted FOREVER.
   termination_str: "Eval Epoch: {epochs}"
 
   # path of sbatch scripts that are generated from the `template`
+  # each experiment will have a dedicated sbatch script.
   sbatch_script: "sbatch/{name}.sbatch"
 
-  # command to run
+  # command to run for each job.
   cmd: "sbatch {sbatch_script}"
 
   # check the status jobs each number of secs, to restart them if needed

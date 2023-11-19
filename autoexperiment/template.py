@@ -14,6 +14,7 @@ class JobDef:
    termination_str: str = ""
    verbose: bool = True
    resume_job_id: int = None
+   params = None
 
 
 def generate_job_defs(path, exp_name=None):
@@ -66,6 +67,7 @@ def generate_job_defs(path, exp_name=None):
          config = tpl.format(**params)
          name = params.get('name', _auto_name(params))
          jobdef = JobDef(config=config, name=name)
+         jobdef.params = params
          for k, v in cfg.common.items():
             setattr(jobdef, k, str(v).format(**params) if type(v) == str else v)
          jobs.append(jobdef)

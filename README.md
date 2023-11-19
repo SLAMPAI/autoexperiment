@@ -65,8 +65,8 @@ defs:
   # here we define reusable components, each component translate to a number
   # of variables that are instantiated in the template file.
   # e.g. if we define a 'datacomp' section, and use it in defining experiments (below),
-  # all the values defined under take their corresponding value, e.g. `train_data` will be replaced
-  # by "/path/{0000000..0139827}.tar" in the sbatch template file.
+  # all the values defined under take their corresponding value, e.g. `train_data` 
+  # will be replacedby "/path/{0000000..0139827}.tar" in the sbatch template file.
   # Here, we have only 'train_data', but we can have a list of variables.
 
   datacomp:
@@ -83,10 +83,11 @@ defs:
 common:
   # here we define common variables to all experiments
 
-  # path to the sbatch template file, this is the basic squeleton of all sbatch files, where variables to be replaced are written as {NAME} (see above)
+  # path to the sbatch template file, this is the basic squeleton of all sbatch files
+  # where variables to be replaced are written as {NAME} (see Step 1)
   template: template.sbatch 
   
-  # path of the standard output file, it is important as it is used for checking three important things:
+  # path of the standard output file, it is important as it is used for checking:
   # 1 - if the job is frozen (if no change in during `check_interval_secs` secs)
   # 2 - the SLURM job id (`job_id_regexp`), this is important if, for some reason, 
   # the `autoexperiment run <CONFIG>` process is terminated and we want to resume it 
@@ -98,12 +99,12 @@ common:
   # so we restart the job as much as needed until we find the `termination_str`)
   output_file: "{logs}/{name}/slurm.out"
   
-  # it is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to display
-  # the SLURM job id (see explanation above), here we define the regexp used to 
-  # find the SLURM job id.
+  # it is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to 
+  # displaythe SLURM job id (see explanation above), here we define the regexp used 
+  # to find the SLURM job id.
   job_id_regexp: "Job Id:(\\d+)"
-  # it is IMPORTANT to define the `termination_str`, it is a regexp used to detect
-  #  if a job is finished, otherwise, it will be restarted FOREVER.
+  # It is IMPORTANT to define the `termination_str`, it is a regexp used to detect
+  # if a job is finished, otherwise, it will be restarted FOREVER.
   termination_str: "Eval Epoch: {epochs}"
 
   # path of sbatch scripts that are generated from the `template`
@@ -148,7 +149,10 @@ First, we generate sbatch scripts:
 
 ```bash
 > ls sbatch
-set1_datacomp_ViT-M-32_1.sbatch  set1_datacomp_ViT-S-32_1.sbatch  set1_laion2b_ViT-M-32_1.sbatch  set1_laion2b_ViT-S-32_1.sbatch
+set1_datacomp_ViT-M-32_1.sbatch
+set1_datacomp_ViT-S-32_1.sbatch
+set1_laion2b_ViT-M-32_1.sbatch
+set1_laion2b_ViT-S-32_1.sbatch
 ```
 
 

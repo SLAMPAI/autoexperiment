@@ -42,11 +42,9 @@ def generate_job_defs(path, exp_name=None):
       # select one of the experiment sets
       if exp_name and name != exp_name:
          continue
-   
       
       vals_all = []
       kvs = list(exp.items())
-      kvs = kvs + [("set", name)]
       # iterate over all the variables defined in the experiment
       for k, v in kvs:
          # can be either a list or a single value
@@ -76,7 +74,10 @@ def generate_job_defs(path, exp_name=None):
          # in the template
          params = {}
 
-         # include the common variables
+         # first, include the name of the experimen set in 'params'
+         params['set'] = name
+
+         # include the common variables (defined in 'common' section)
          for k, v in cfg.common.items():
             params[k] = v
 
@@ -122,8 +123,10 @@ def generate_job_defs(path, exp_name=None):
          jobdef.params = params
 
          # include the common variables in the jobdef
+         # they are directly used by the manager (e.g. check_interval_secs, name, etc)
          for k, v in cfg.common.items():
             setattr(jobdef, k, str(v).format(**params) if type(v) == str else v)
+         
          jobs.append(jobdef)
    return jobs
 

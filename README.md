@@ -67,16 +67,16 @@ srun --cpu_bind=none,v --accel-bind=gn python -u src/training/main.py \
 defs:
   # Here, we define reusable components, each component translate to a number
   # of variables that are instantiated in the template file.
-  # e.g. if we define a 'datacomp' section, and use it in defining experiments 
-  # (see section 'experiments below), all the values defined under take their 
+  # e.g. if we define a "datacomp" section, and use it in defining experiments 
+  # (see section "experiments below), all the values defined under take their 
   # corresponding value, e.g. if we use datacomp,`train_data` will be replaced by 
   # "/path/{0000000..0139827}.tar" in the sbatch template file.
-  # Here, we have only 'train_data' for datacomp and laion2b, but we can have a list of 
+  # Here, we have only "train_data" for datacomp and laion2b, but we can have a list of 
   # variables. For instance, for s32/m32, we define both `model` and `batch_size`,
   # as the maximum local batch size depend on the model size. Thus, if we 
-  # use s32 in defining experiments (see section 'experiments below),
-  # 'model' will take the value 'ViT-M-32' and 'batch_size' will take the 
-  # value '1024' in the sbatch script.
+  # use s32 in defining experiments (see section "experiments below),
+  # "model" will take the value "ViT-M-32" and "batch_size" will take the 
+  # value "1024" in the sbatch script.
 
   datacomp:
     train_data: "/path/{0000000..0139827}.tar"

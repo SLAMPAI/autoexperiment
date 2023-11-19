@@ -118,10 +118,10 @@ common:
   check_interval_secs: 600
 
 experiments:
-  # in experiments, we define a list of named set of experiments
-  # in each set (here, we only define a single one, `set1`), we
-  # simply do the cartesian product of all the parameters defined in it
-  # each member of the product will define a single sbatch script, i.e.
+  # in experiments, we define a list of named set of experiments.
+  # In each set (here, we only define a single one,  named `set1`), we
+  # simply do the cartesian product of all the parameters defined in it.
+  # each instance of the product will define a single sbatch script, i.e.
   # a single job. all the variables defined in the set will be replaced
   # with their value in the template (here, `template.sbatch`)
   set1:

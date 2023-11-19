@@ -12,6 +12,9 @@ Launch and manage batch of SLURM experiments easily
 
 ## Step 1: write a `template.sbatch` to define sbatch template
 
+This is the basic squeleton of all sbatch files where variables to be replaced are 
+written as `{NAME}`.
+
 ```bash
 #!/bin/bash -x
 #SBATCH --account=cstdl
@@ -62,7 +65,7 @@ srun --cpu_bind=none,v --accel-bind=gn python -u src/training/main.py \
 
 ```yaml
 defs:
-  # here we define reusable components, each component translate to a number
+  # Here, we define reusable components, each component translate to a number
   # of variables that are instantiated in the template file.
   # e.g. if we define a 'datacomp' section, and use it in defining experiments (below),
   # all the values defined under take their corresponding value, e.g. `train_data` 
@@ -83,13 +86,13 @@ defs:
     batch_size: 1024
   
 common:
-  # here we define common variables to all experiments
+  # Here, we define common variables to all experiments
 
-  # path to the sbatch template file, this is the basic squeleton of all sbatch files
+  # Path to the sbatch template file, this is the basic squeleton of all sbatch files
   # where variables to be replaced are written as {NAME} (see Step 1)
   template: template.sbatch 
   
-  # path of the standard output file, it is important as it is used for checking:
+  # Path of the standard output file, it is important as it is used for checking:
   # 1 - if the job is frozen (if no change in during `check_interval_secs` secs)
   # 2 - the SLURM job id (`job_id_regexp`), this is important if, for some reason, 
   # the `autoexperiment run <CONFIG>` process is terminated and we want to resume it 
@@ -101,7 +104,7 @@ common:
   # so we restart the job as much as needed until we find the `termination_str`)
   output_file: "{logs}/{name}/slurm.out"
   
-  # it is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to 
+  # It is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to 
   # displaythe SLURM job id (see explanation above), here we define the regexp used 
   # to find the SLURM job id.
   job_id_regexp: "Job Id:(\\d+)"
@@ -109,18 +112,18 @@ common:
   # if a job is finished, otherwise, it will be restarted FOREVER.
   termination_str: "Eval Epoch: {epochs}"
 
-  # path of sbatch scripts that are generated from the `template`
+  # Path of sbatch scripts that are generated from the `template`
   # each experiment will have a dedicated sbatch script.
   sbatch_script: "sbatch/{name}.sbatch"
 
-  # command to run for each job.
+  # Command to run for each job.
   cmd: "sbatch {sbatch_script}"
 
-  # check the status jobs each number of secs, to restart them if needed
+  # Check the status jobs each number of secs, to restart them if needed
   check_interval_secs: 600
 
 experiments:
-  # in experiments, we define a list of named set of experiments.
+  # In experiments, we define a list of named set of experiments.
   # In each set (here, we only define a single one,  named `set1`), we
   # simply do the cartesian product of all the parameters defined in it.
   # each instance of the product will define a single sbatch script, i.e.

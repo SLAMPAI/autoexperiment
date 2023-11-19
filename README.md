@@ -114,6 +114,9 @@ common:
   job_id_regexp: "Job Id:(\\d+)"
   # It is IMPORTANT to define the `termination_str`, it is a regexp used to detect
   # if a job is finished, otherwise, it will be restarted FOREVER.
+  # here, we detect a finishing job if it finishes the zero-shot evaluation
+  # of the latest epoch.
+  # ({epochs} will take the value of epochs, see section experiments below)
   termination_str: "Eval Epoch: {epochs}"
 
   # Path of sbatch scripts that are generated from the `template`

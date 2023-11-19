@@ -43,7 +43,7 @@ setup(
     packages=find_packages(include=['autoexperiment', 'autoexperiment.*']),
     test_suite='tests',
     tests_require=test_requirements,
-    url='https://github.com/mehdidc/autoexperiment',
+    url='https://github.com/SLAMPAI/autoexperiment',
     version='0.1.0',
     zip_safe=False,
 )

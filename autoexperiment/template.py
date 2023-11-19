@@ -109,19 +109,18 @@ def generate_job_defs(path, exp_name=None):
                   pass
             if old_params == params:
                break
-         # at this point, we can use the template to generate the config file
-         # from the 'params' dictionary
+         # at this point, we can use the template file to generate the config file
+         # by replacing all the  keys from 'params' with theirvalues in the template
+         # file.
          tpl = open(cfg.common.template).read()
          config = tpl.format(**params)
          # auto generate the name of the job from the full set of params
-         # if  'name' is not present in 'params'
+         # if 'name' is not present in 'params', otherwise just use the value of 'name'
          name = params.get('name', _auto_name(params))
 
-         # Define the JobDef structure, which is used by the manager
+         # Define the 'JobDef' structure, which is directly used by the manager
          # to schedule/manaage the jobs
-         jobdef = JobDef(config=config, name=name)
-         jobdef.params = params
-
+         jobdef = JobDef(config=config, name=name, params=params)
          # include the common variables in the jobdef
          # they are directly used by the manager (e.g. check_interval_secs, name, etc)
          for k, v in cfg.common.items():

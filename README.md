@@ -62,6 +62,12 @@ srun --cpu_bind=none,v --accel-bind=gn python -u src/training/main.py \
 
 ```yaml
 defs:
+  # here we define reusable components, each component translate to a number
+  # of variables that are instantiated in the template file.
+  # e.g. if we define a 'datacomp' section, and use it in defining experiments (below),
+  # all the values defined under take their corresponding value, e.g. `train_data` will be replaced
+  # by "/path/{0000000..0139827}.tar" in the sbatch template file.
+  # Here, we have only 'train_data', but we can have a list of variables.
 
   datacomp:
     train_data: "/path/{0000000..0139827}.tar"
@@ -75,22 +81,49 @@ defs:
     batch_size: 1024
   
 common:
-  template: template.sbatch
+  # here we define common variables to all experiments
+
+  # path to the sbatch template file, this is the basic squeleton of all sbatch files, where variables to be replaced are written as {NAME} (see above)
+  template: template.sbatch 
+  
+  # path of the standard output file, it is important as it is used for checking three important things:
+  # 1 - if the job is frozen (no change in `check_interval_secs`)
+  # 2 - the SLURM job id (`job_id_regexp`), this is important if for some reason, the `autoexperiment run <CONFIG>` process is terminated and we want to resume it without restarting the current jobs. e.g., if it happens, just relaunch `autoexperiment run <CONFIG>` again, and it will find the job ids
+  # 3 - the termination string (`termination_str`) to know when to stop restarting the job (remember that we have a max time limit, so we restart the job as much as needed until we find the `termination_str`)
   output_file: "{logs}/{name}/slurm.out"
+  
   job_id_regexp: "Job Id:(\\d+)"
-  sbatch_script: "sbatch/{name}.sbatch"
-  cmd: "sbatch {sbatch_script}"
   termination_str: "Eval Epoch: {epochs}"
+
+  # path of sbatch scripts that are generated from the `template`
+  sbatch_script: "sbatch/{name}.sbatch"
+
+  # command to run
+  cmd: "sbatch {sbatch_script}"
+
+  # check the status jobs each number of secs, to restart them if needed
   check_interval_secs: 600
+
 experiments:
+  # in experiments, we define a list of named set of experiments
+  # in each set (here, we only define a single one, `set1`), we
+  # simply do the cartesian product of all the parameters defined in it
+  # each member of the product will define a single sbatch script, i.e.
+  # a single job. all the variables defined in the set will be replaced
+  # with their value in the template (here, `template.sbatch`)
   set1:
+      # variables can either be a list or a single value
       dataset: [datacomp, laion2b]
       model: [s32, m32]
-      epochs: [1]
+      epochs: 1 
       logs: "logs/{set}"
-      name: "{set}_{dataset}_{model}_{epochs}"
-      nodes: [1]
+      nodes: 1
       train_num_samples: [12_800_000]
+      # each experiment will have a name, which we can define in any way
+      # we want. 
+      # it will be used in the template (`template.sbatch` here) but also to make the sbatch script name.
+      name: "{set}_{dataset}_{model}_{epochs}"
+
 
 ```
 

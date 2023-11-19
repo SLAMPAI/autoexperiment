@@ -131,6 +131,9 @@ def generate_job_defs(path, exp_name=None):
 
 
 def _auto_name(params):
+    """
+    Generate a name for the job from the dictionary of the params
+    """
     name = ""
     keys = sorted(params.keys())
     for k in keys:

@@ -75,8 +75,8 @@ defs:
   # variables. For instance, for s32/m32, we define both `model` and `batch_size`,
   # as the maximum local batch size depend on the model size. Thus, if we 
   # use s32 in defining experiments (see section 'experiments below),
-  # model will take the value 'ViT-M-32' and batch_size will take the 
-  # value 1024in the sbatch script.
+  # 'model' will take the value 'ViT-M-32' and 'batch_size' will take the 
+  # value '1024' in the sbatch script.
 
   datacomp:
     train_data: "/path/{0000000..0139827}.tar"
@@ -90,7 +90,7 @@ defs:
     batch_size: 1024
   
 common:
-  # Here, we define common variables to all experiments
+  # Here, we define common variables to all experiments.
 
   # Path to the sbatch template file, this is the basic squeleton of all sbatch files
   # where variables to be replaced are written as {NAME} (see Step 1)
@@ -103,20 +103,21 @@ common:
   # while we still have running jobs in SLURM. If it happens, just relaunch 
   # `autoexperiment run <CONFIG>` again, and it will find automatiaclly the SLURM job ids 
   # and continue as before, instead of launching new ones.
-  # 3 - to find if the termination string (`termination_str`) appeared, this is used to 
-  # stop restarting the jobs forever (remember that we have a max time limit in SLURM, 
-  # so we restart the job as much as needed until we find the `termination_str`)
+  # 3 - to find if the termination string (`termination_str`) appeared in the output file, 
+  # this is used to stop from restarting the job forever, and consider it finished.
+  # Remember that we have a max time limit in SLURM, 
+  # so we restart the job as much as needed until we find the `termination_str`.
   output_file: "{logs}/{name}/slurm.out"
   
   # It is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to 
-  # displaythe SLURM job id (see explanation above), here we define the regexp used 
+  # figure out SLURM job id (see explanation above), here we define the regexp used 
   # to find the SLURM job id.
   job_id_regexp: "Job Id:(\\d+)"
   # It is IMPORTANT to define the `termination_str`, it is a regexp used to detect
   # if a job is finished, otherwise, it will be restarted FOREVER.
-  # here, we detect a finishing job if it finishes the zero-shot evaluation
-  # of the latest epoch.
-  # ({epochs} will take the value of epochs, see section experiments below)
+  # Here, for instance, we detect a finishing job if it finishes the zero-shot 
+  # evaluatioof the latest epoch.
+  # ({epochs} will take the value of epochs, see section experiments below).
   termination_str: "Eval Epoch: {epochs}"
 
   # Path of sbatch scripts that are generated from the `template`

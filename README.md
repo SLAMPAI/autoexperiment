@@ -1,7 +1,7 @@
 # autoexperiment
 
 Launch and manage batch of SLURM experiments easily
-\
+
 # How to install
 
 - `git clone https://github.com/SLAMPAI/autoexperiment`
@@ -88,15 +88,22 @@ common:
   
   # path of the standard output file, it is important as it is used for checking three important things:
   # 1 - if the job is frozen (if no change in during `check_interval_secs` secs)
-  # 2 - the SLURM job id (`job_id_regexp`), this is important if, for some reason, the `autoexperiment run <CONFIG>` process is terminated and we want to resume it while we still have running jobs in SLURM. If it happens, just relaunch `autoexperiment run <CONFIG>` again, and it will find utomatiaclly the SLURM job ids and continue as before, instead of launching new ones.
-  # 3 - to find if the termination string (`termination_str`) appeared, this is used to stop restarting the jobs forever (remember that we have a max time limit in SLURM, so we restart the job as much as needed until we find the `termination_str`)
+  # 2 - the SLURM job id (`job_id_regexp`), this is important if, for some reason, 
+  # the `autoexperiment run <CONFIG>` process is terminated and we want to resume it 
+  # while we still have running jobs in SLURM. If it happens, just relaunch 
+  # `autoexperiment run <CONFIG>` again, and it will find automatiaclly the SLURM job ids 
+  # and continue as before, instead of launching new ones.
+  # 3 - to find if the termination string (`termination_str`) appeared, this is used to 
+  # stop restarting the jobs forever (remember that we have a max time limit in SLURM, 
+  # so we restart the job as much as needed until we find the `termination_str`)
   output_file: "{logs}/{name}/slurm.out"
   
   # it is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to display
-  # the SLURM job id (see explanation above), here we define the regexp used to find the SLURM job id.
+  # the SLURM job id (see explanation above), here we define the regexp used to 
+  # find the SLURM job id.
   job_id_regexp: "Job Id:(\\d+)"
-  # it is IMPORTANT to define the `termination_str`, it is a regexp used to detect if a job is finished,
-  # otherwise, it will be restarted FOREVER.
+  # it is IMPORTANT to define the `termination_str`, it is a regexp used to detect
+  #  if a job is finished, otherwise, it will be restarted FOREVER.
   termination_str: "Eval Epoch: {epochs}"
 
   # path of sbatch scripts that are generated from the `template`
@@ -126,7 +133,8 @@ experiments:
       train_num_samples: [12_800_000]
       # each experiment will have a name, which we can define in any way
       # we want. 
-      # it will be used in the template (`template.sbatch` here) but also to make the sbatch script name.
+      # it will be used in the template (`template.sbatch` here) but also to make 
+      # the sbatch script name.
       name: "{set}_{dataset}_{model}_{epochs}"
 
 

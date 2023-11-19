@@ -5,9 +5,10 @@ Launch and manage batch of SLURM experiments easily
 # How to install
 
 - `git clone https://github.com/SLAMPAI/autoexperiment`
+- `pip install -r requirements.txt`
 - `python setup.py develop`
 
-# How to use
+ How to use
 
 ## Step 1: write a `template.sbatch` to define sbatch template
 

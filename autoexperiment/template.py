@@ -28,7 +28,7 @@ def generate_job_defs(path, exp_name=None):
       kvs = kvs + [("set", name)]
 
       for k, v in kvs:
-         if type(v) == str:
+         if type(v) in (str, int):
             v = [v]
          else:
             pass

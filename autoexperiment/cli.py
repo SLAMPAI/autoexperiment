@@ -11,6 +11,10 @@ def main():
 
 
 def build(config, *, exp:str=None):
+    """
+    Generate sbatch scripts from a yaml config file that
+    defines a set of experiments to do.
+    """
     if not config:
          print("Please specify a config file")
          return 1
@@ -22,6 +26,11 @@ def build(config, *, exp:str=None):
     return 0
 
 def run(config, *, exp:str=None):
+    """
+    Manage/schedule jobs corresponding to a config file after
+    having generated the sbatch scripts.
+    This step requires the 'build' step to have been done first.
+    """
     if not config:
          print("Please specify a config file")
          return 1

@@ -1,6 +1,6 @@
 from omegaconf import OmegaConf
 from itertools import product
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 @dataclass
 class JobDef:
@@ -18,6 +18,8 @@ class JobDef:
    output_file: str = "slurm.out"
    # command to run for the job
    cmd: str = "sbatch run.sbatch"
+   # path to sbatch script
+   sbatch_script: str = "run.sbatch"
    # secs to wait before checking if job is done/frozen/etc
    check_interval_secs: int = 60*15
    # command to check if job should be started or not (ignored if empty)
@@ -37,10 +39,10 @@ def generate_job_defs(path, exp_name=None):
    cfg = OmegaConf.load(path)
    defs = cfg.defs
    jobs = []
-   for name, exp in cfg.experiments.items():
+   for exp_set, exp in cfg.experiments.items():
 
       # select one of the experiment sets, if 'exp_name' is provided
-      if exp_name and name != exp_name:
+      if exp_name and exp_set != exp_name:
          continue
       
       vals_all = []
@@ -73,7 +75,7 @@ def generate_job_defs(path, exp_name=None):
          params = {}
 
          # first, include the name of the experiment set in 'params'
-         params['set'] = name
+         params['set'] = exp_set
 
          # include the common variables (defined in 'common' section)
          for k, v in cfg.common.items():
@@ -103,7 +105,7 @@ def generate_job_defs(path, exp_name=None):
             old_params = params.copy()
             for k, v in params.items():
                try:
-                  params[k] = params[k].format(**params)
+                  params[k] = old_params[k].format(**old_params)
                except Exception:
                   pass
             if old_params == params:
@@ -111,7 +113,7 @@ def generate_job_defs(path, exp_name=None):
          # at this point, we can use the template file to generate the config file
          # by replacing all the keys from 'params' with their values in the template
          # file.
-         tpl = open(cfg.common.template).read()
+         tpl = open(params['template']).read()
          config = tpl.format(**params)
          # auto generate the name of the job from the full set of params
          # if 'name' is not present in 'params', otherwise just use the value of 'name'
@@ -122,11 +124,10 @@ def generate_job_defs(path, exp_name=None):
          # Define the 'JobDef' structure, which is directly used by the manager
          # to schedule/manaage the jobs
          jobdef = JobDef(config=config, name=name, params=params)
-         # include the common variables in the jobdef instance.
-         # They are directly used by the manager (e.g. check_interval_secs, name, etc)
-         for k, v in cfg.common.items():
-            setattr(jobdef, k, str(v).format(**params) if type(v) == str else v)
-         
+         # These are directly used by the manager (e.g. check_interval_secs, name, etc)
+         for field in fields(jobdef):
+            if field.name in params:
+               setattr(jobdef, field.name, params[field.name])
          jobs.append(jobdef)
    return jobs
 

@@ -14,7 +14,7 @@ defs:
     sbatch_script: "sbatch_scripts/{set}/{name}.sbatch"
     output_file: "{logs}/{name}/slurm.out"
     nodes: 24
-    termination_str: "Eval Epoch: {epochs}"
+    termination_cmd: 'let last={epochs}-1;grep "Train Epoch: $last.*100%" {output_file}|wc -l'
   eval:
     template: eval.sbatch
     sbatch_script: "sbatch_scripts/{set}/{name}_eval.sbatch"

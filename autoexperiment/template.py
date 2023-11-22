@@ -23,9 +23,11 @@ class JobDef:
    # secs to wait before checking if job is done/frozen/etc
    check_interval_secs: int = 60*15
    # command to check if job should be started or not (ignored if empty)
-   start_condition: str = ""
+   start_condition_cmd: str = ""
    # string to check if job is done in the output file
    termination_str: str = ""
+   # command to check to terminate the job (alternative to termination_str)
+   termination_cmd: str = ""
    # if true, print more logging info
    verbose: bool = True
  

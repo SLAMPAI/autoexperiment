@@ -22,8 +22,9 @@ async def manage_job(job):
     cmd = job.cmd
     output_file = job.output_file
     check_interval_secs = job.check_interval_secs
-    start_condition = job.start_condition
+    start_condition_cmd = job.start_condition_cmd
     termination_str = job.termination_str
+    termination_cmd = job.termination_cmd
     verbose = job.verbose
     if os.path.exists(output_file):
         # look for job id from the output file
@@ -34,21 +35,27 @@ async def manage_job(job):
         resume_job_id = None
     
     while True:
-        if start_condition:
-            # if start condition is provided, check it first by running it in a shell
-            # if it outputs 0 (false), do not start the job and wait and check again, 
-            # otherwise, start the job
-            if verbose:
-                print("Checking start condition...")
-            if int(check_output(start_condition, shell=True)) == 0:
-                if verbose:
-                    print(f"Start condition returned 0, not starting for {job.name}, retrying again in {check_interval_secs//60} mins.")
-                await asyncio.sleep(check_interval_secs)
-                continue
         if check_if_done(output_file, termination_str):
             if verbose:
                 print(f"Termination string found for {job.name}, finishing")
             return
+        if termination_cmd and int(check_output(termination_cmd, shell=True)) == 1:
+            if verbose:
+                print(f"Termination command returned 1, finishing {job.name}")
+            return
+        if start_condition_cmd:
+            # if start condition is provided, check it first by running it in a shell
+            # if it outputs 0 (false), do not start the job and wait and check again, 
+            # otherwise, start the job
+            if verbose:
+                print(f"Checking start condition of {job.name}...")
+            value = int(check_output(start_condition_cmd, shell=True))
+            if value != 1:
+                if verbose:
+                    print(f"Start condition returned {value}, not starting for {job.name}, retrying again in {check_interval_secs//60} mins.")
+                await asyncio.sleep(check_interval_secs)
+                continue
+
         if resume_job_id is not None:
             if verbose:
                 print(f"Resume {job.name} from job id: {resume_job_id}")
@@ -87,6 +94,10 @@ async def manage_job(job):
                     if verbose:
                         print(f"Termination string found for {job.name}, finishing")
                     return
+                if termination_cmd and int(check_output(termination_cmd, shell=True)) == 1:
+                    if verbose:
+                        print(f"Termination command returned 1, finishing {job.name}")
+                    return
                 if verbose:
                     print(f"Retrying again in {check_interval_secs//60} mins for {job.name}...")
                 await asyncio.sleep(check_interval_secs)
@@ -96,6 +107,10 @@ async def manage_job(job):
                 if check_if_done(output_file, termination_str):
                     if verbose:
                         print(f"Termination string found for {job.name}, finishing")
+                    return
+                if termination_cmd and int(check_output(termination_cmd, shell=True)) == 1:
+                    if verbose:
+                        print(f"Termination command returned 1, finishing {job.name}")
                     return
                 break
             # Check first if job is specifically on a running state (to avoid the case where it is on pending state etc)

@@ -119,6 +119,17 @@ common:
   # evaluatioof the latest epoch.
   # ({epochs} will take the value of epochs, see section experiments below).
   termination_str: "Eval Epoch: {epochs}"
+  
+  # an alternative is to use `termination_cmd`, where instead a shell command
+  # is executed, if it returns the value 1, the job is considered as finished.
+  termination_cmd: ""
+
+  # one can also have start condition, where the job is launched only
+  # under some constraint. This can be the case for evaluations, for instance,
+  # as they require that checkpoints of the models do exist beforehand.
+  # Here, we execute the shell command 'start_condition_cmd', if it returns
+  # the value 1, the job is launched.
+  start_condition_cmd: ""
 
   # Path of sbatch scripts that are generated from the `template`
   # each experiment will have a dedicated sbatch script.

@@ -202,4 +202,4 @@ Termination string found for set1_laion2b_ViT-M-32_1, finishing
 ````
 
 
-For a more complete example, see [examples/small_scale_scaling]
+For a more complete example, see <examples/small_scale_scaling>

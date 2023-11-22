@@ -24,7 +24,6 @@ def build(config, *, exp:str=None):
        with open(f"{jobdef.sbatch_script}", "w") as f:
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
-    return 0
 
 def run(config, *, exp:str=None):
     """
@@ -37,7 +36,6 @@ def run(config, *, exp:str=None):
          return 1
     jobdefs = generate_job_defs(config, exp_name=exp)
     manage_jobs_forever(jobdefs)
-    return 0
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ experiments:
   small_scale_scaling:
       dataset: [datacomp]
       model: [s32, m32]
-      epochs: [1, 10, 100] # 1.28B, 12.8B
+      epochs: [1, 10, 100] # 128M, 1.28B, 12.8B
       train_num_samples: 128_000_000
       logs: "logs/{set}"
       name: "{dataset}_{model}_ep{epochs}_lr{lr}"

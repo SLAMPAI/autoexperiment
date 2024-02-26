@@ -122,32 +122,19 @@ cmd: "sbatch {sbatch_script}"
 # Check the status jobs each number of secs, to restart them if needed
 check_interval_secs: 600
 
-# here, we start definining the combinations of variables that we use
-
 # we first define few variables, which will be reused below
-datacomp:
-  train_data: "/path/{0000000..0139827}.tar"
-laion2b:
-  train_data: "/path/{00000..23295}.tar"
-s32:
-  model: ViT-S-32
-  batch_size: 1024
-m32:
-  model: ViT-M-32
-  batch_size: 1024
-
-# remember, only when a list is used is when we do the cartesian product
-# so here, dataset takes `datacomp` or `laion2b`
-#  `datacomp` / `laion2b` being defined above, they will themselves instantiate `train_data` which
-# itself will be used in the template (`template.sbatch`)
-
-dataset: [datacomp, laion2b]
-
-# same idea for models
-
-model: [s32, m32]
-
-# rest take a single value
+dataset:
+  - datacomp:
+      train_data: "/path/{0000000..0139827}.tar"
+  - laion2b:
+      train_data: "/path/{00000..23295}.tar"
+model_scale:
+  - s32:
+      model: ViT-S-32
+      batch_size: 1024
+  - m32:
+      model: ViT-M-32
+      batch_size: 1024
 epochs: 1 
 logs: "logs"
 nodes: 1
@@ -196,4 +183,5 @@ Termination string found for set1_laion2b_ViT-M-32_1, finishing
 ````
 
 
-For a more complete example, see [examples/small_scale_scaling](examples/small_scale_scaling)
+For a more complete example, see [examples/small_scale_scaling](examples/small_scale_scaling) and
+[examples/full_example](examples/full_example)

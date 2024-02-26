@@ -1,36 +1,36 @@
 job_id_regexp: "Job Id:(\\d+)"
 cmd: "sbatch {sbatch_script}"
 check_interval_secs: 600
-datacomp:
-  train_data: "/path/{0000000..0139827}.tar"
-s32:
-  model: ViT-S-32
-m32:
-  model: ViT-M-32
-train:
-  template: train.sbatch
-  sbatch_script: "sbatch_scripts/{name}.sbatch"
-  output_file: "{logs}/{name}/slurm.out"
-  nodes: 24
-  # terminate training if we detect that last epoch is finished
-  # e.g. if number of epochs is 100 and we find the expression Train Epoch: 99 .... 100%, we return 1
-  # thus terminating the job.
-  termination_cmd: 'let last={epochs}-1;grep "Train Epoch: $last.*100%" {output_file}|wc -l'
-eval:
-  template: eval.sbatch
-  sbatch_script: "sbatch_scripts/{name}_eval.sbatch"
-  output_file: "{logs}/{name}/slurm_eval.out"
-  nodes: 1
-  # evals have starting condition, they are only launched if  number of checkpoints is greater than number of evaluations (json result files)
-  start_condition_cmd: "nc=`ls {logs}/{name}/checkpoints/*.pt|wc -l`;ne=`ls {logs}/{name}/checkpoints/imagenet1k*.json|wc -l`;echo $(( (nc-ne) > 0 ))"
-  # we only terminate evals when number of evals is equal to number of epochs
-  termination_cmd: "ne=`ls {logs}/{name}/checkpoints/imagenet1k*.json|wc -l`;echo $(( (ne) == {epochs}+1 ))"
-dataset: [datacomp]
-model: [s32, m32]
+dataset:
+  - datacomp:
+      train_data: "/path/{0000000..0139827}.tar"
+model_scale:
+  - s32:
+      model: ViT-S-32
+  - m32:
+      model: ViT-M-32
+mode:
+  - train:
+      template: train.sbatch
+      sbatch_script: "sbatch_scripts/{name}.sbatch"
+      output_file: "{logs}/{name}/slurm.out"
+      nodes: 24
+      # terminate training if we detect that last epoch is finished
+      # e.g. if number of epochs is 100 and we find the expression Train Epoch: 99 .... 100%, we return 1
+      # thus terminating the job.
+      termination_cmd: 'let last={epochs}-1;grep "Train Epoch: $last.*100%" {output_file}|wc -l'
+  - eval:
+      template: eval.sbatch
+      sbatch_script: "sbatch_scripts/{name}_eval.sbatch"
+      output_file: "{logs}/{name}/slurm_eval.out"
+      nodes: 1
+      # evals have starting condition, they are only launched if  number of checkpoints is greater than number of evaluations (json result files)
+      start_condition_cmd: "nc=`ls {logs}/{name}/checkpoints/*.pt|wc -l`;ne=`ls {logs}/{name}/checkpoints/imagenet1k*.json|wc -l`;echo $(( (nc-ne) > 0 ))"
+      # we only terminate evals when number of evals is equal to number of epochs
+      termination_cmd: "ne=`ls {logs}/{name}/checkpoints/imagenet1k*.json|wc -l`;echo $(( (ne) == {epochs}+1 ))"
 epochs: [1, 10, 100] # 128M, 1.28B, 12.8B
 train_num_samples: 128_000_000
 logs: "logs"
-name: "{dataset}_{model}_ep{epochs}_lr{lr}"
 batch_size: 896
 lr: 0.001
-mode: [train, eval]
+name: "{dataset}_{model_scale}_ep{epochs}_lr{lr}"

@@ -31,48 +31,101 @@ class JobDef:
    # if true, print more logging info
    verbose: bool = True
  
+
+
 def product_recursive(cfg):
    """
-   do cartesian product recursively
+   Generate all possible combinations of parameters in a config file.
 
-   product_recursive(x,y,z) = product( product_recursive(x), product_recursive(y), product_recursive(z))
+   Returns a list of dicts where:
+   each dict is a group set of params (and their values) that occur together
+   the keys are tuples constructed from the nested structure, the values are the corresponding values
 
-   recursion happens when we have possibilities, this is only the case when we have list
-   list is either a plain list, or list of dicts where dict has single key and a value, basically
-   just like a list where we name items
+   - a param is either a single key=value, a list of params, or a dict of params
+   - dict of params result in cartesian product of the values of the params, e.g.:
+
+      ```
+      d:
+         x:[1,2]
+         y:[3,4]
+      ```
+      this is a dict with keys x and y, values [1,2] and [3,4].
+      the dict will result in:
+      [{(d,x):1,(d,y):3}, {(d,x):1,(d,y):4}, {(d,x):2,(d,y):3}, {(d,x):3, (d,y):4}]
+   - list of params result in a union of the values, e.g.:
+
+      ```
+      - x: 
+         val: [1,2]
+         r: 5
+      - y:
+         val: [3,4]
+         r: 6
+      ```
+      will result in:
+      [{(x,val):1, (x,r): 5}, {(x,val):2, (x,r): 5}, {(y,val):3,(x,r): 6}, {(y,val):4,(x,r): 6}]
+      i.e., x has two values, y has two values. we just concatenate all the values (2+2=4 values).
+
+
+      notice, if we remove the dash (-) like the following:
+
+      ```
+      x: 
+         val: [1,2]
+         r: 5
+      y:
+         val: [3,4]
+         r: 6
+      ```
+      we have a dict, so it is different semantics (that is, cartesian product), (2*2 = 4 values) it will result in:
+
+      [{(x,val:1), (x,r):5}, {(x,val):2, (x,r):5}] X [{(y,val):3, (y,r):6}, {(y,val):4, (y,r):6}]  = [
+         {(x,val:1), (x,r):5, (y,val):3, (y,r):6},
+         {(x,val:1), (x,r):5, (y,val):4, (y,r):6},
+         {(x,val:2), (x,r):5, (y,val):3, (y,r):6},
+         {(x,val:2), (x,r):5, (y,val):4, (y,r):6},
+      ]
    """
-   vals_all = []
-   for k, v in cfg.items():
-      # variables vale can be either a list or a single value
-      # if single value, convert to list of single element
-      if type(v) in (str, int, float):
-         vs = [(k, v)]
-      # if dict, also single value but where the value is a tuple of kv items
-      elif type(v) == DictConfig:
-         vs = [(k, tuple(v.items()))]
-      # only when it is list that we consider that there are multiple values
-      elif type(v) == ListConfig:
-         # two types of lists:
-         # 1) list of dicts, where dict has single key, and a value, [{'x':...}, {'y':...}, {'z':...}], 
-         #    basically, this is just like a list where we name items
-         # 2) plain list [x,y,z]
-         if all(type(vi) == DictConfig and len(vi)==1 for vi in v):
-            # list of dicts
-            vs = [(k, _key(vi), kvs) for vi in v for kvs in product_recursive(_value(vi))]
-         else:
-            # plain list
-            vs = [(k, vi) for vi in v]
+   if type(cfg) in (str, int, float):
+      return [{tuple(): cfg}]
+   elif type(cfg) == ListConfig:
+      if all(type(vi) == DictConfig and len(vi) == 1 for vi in cfg):
+         all_vals = []
+         for kv in cfg:
+            k = _first_key(kv)
+            v = _first_val(kv)
+            vals = [_add_key(k, vi) for vi in product_recursive(v)]
+            all_vals.extend(vals)
+         return all_vals
+      elif all(type(vi) in (str, int, float) for vi in cfg):
+         return  [{tuple(): vi} for vi in cfg]
       else:
-         print(type(v))
-         raise ValueError(v)
-      vals_all.append(vs)
-   return product(*vals_all)
+         raise ValueError()
+   elif type(cfg) == DictConfig:
+      vals_all = []
+      for k, v in cfg.items():
+         vs = [ _add_key(k, vi) for vi in product_recursive(v)]
+         vals_all.append(vs)
+      vals_all = product(*vals_all)
+      vals_all = [_merge(vi) for vi in vals_all]
+      return vals_all
+   else:
+      raise ValueError(f"Unexpected type {type(cfg)}")
 
-def _key(d):
-   return list(d.keys())[0]
+def _add_key(k, vi):
+   return { (k,)+kii: vii for kii, vii in vi.items()}
 
-def _value(d):
-   return list(d.values())[0]
+def _first_key(kv):
+   return list(kv.keys())[0]
+
+def _first_val(kv):
+   return list(kv.values())[0]
+
+def _merge(ds):
+   d = {}
+   for di in ds:
+      d.update(di)
+   return d
 
 def generate_job_defs(path):
    """
@@ -86,7 +139,7 @@ def generate_job_defs(path):
       # of all the variables that can be used
       # in the template
       params = {}
-      for *ks, v in vals:
+      for ks, v in vals.items():
          # each variable is a tuple of keys followed by the value
          # we can have multiple keys because we can have deep branches of possibitilies
          # so as many keys as we go deep
@@ -98,26 +151,6 @@ def generate_job_defs(path):
             params[ki] = kin
          # last key goes to the actual value
          params[ks[-1]] = v
-      # replace any reference by its value and
-      # inject the dict-based variables directly into params
-      # keep doing until no refenrece needs to be replaced
-      # by its value
-      while True:
-         old_params = params.copy()
-         for k, v in old_params.items():
-            
-            # replace the variable by its value
-            # if in params 
-            if type(v) == str and v in old_params:
-               v = old_params[v]
-
-            # expand the dicts directly in params
-            if type(v) == tuple:
-               for ki, vi in v:
-                  params[ki] = vi
-         if old_params == params:
-            break
-      
       # if value of a variable is a template format (e.g., '{dataset}_{lr}'), replace the keys
       # by the values.
       # keep doing until no key needs to be replaced
@@ -126,7 +159,7 @@ def generate_job_defs(path):
          for k, v in params.items():
             try:
                params[k] = old_params[k].format(**old_params)
-            except Exception:
+            except Exception as ex:
                pass
          if old_params == params:
             break

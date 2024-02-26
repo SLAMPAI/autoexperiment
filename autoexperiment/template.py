@@ -90,6 +90,7 @@ def product_recursive(cfg):
       return [{tuple(): cfg}]
    elif type(cfg) == ListConfig:
       if all(type(vi) == DictConfig and len(vi) == 1 for vi in cfg):
+         # list of dicts where each dict has a single key and a value:
          all_vals = []
          for kv in cfg:
             k = _first_key(kv)
@@ -98,9 +99,11 @@ def product_recursive(cfg):
             all_vals.extend(vals)
          return all_vals
       elif all(type(vi) in (str, int, float) for vi in cfg):
+         # list of str/int/float values
          return  [{tuple(): vi} for vi in cfg]
       else:
-         raise ValueError()
+         # list of something else?
+         raise ValueError(f"list should either be of str/int/float values, or list of dicts with a single key/value, got:{cfg}")
    elif type(cfg) == DictConfig:
       vals_all = []
       for k, v in cfg.items():
@@ -110,18 +113,30 @@ def product_recursive(cfg):
       vals_all = [_merge(vi) for vi in vals_all]
       return vals_all
    else:
-      raise ValueError(f"Unexpected type {type(cfg)}")
+      raise ValueError(f"Unexpected type {type(cfg)}, should be either str or int or float or ListConfig or DictConfig")
 
 def _add_key(k, vi):
+   """
+   insert the key k to the list of keys of each dict element
+   """
    return { (k,)+kii: vii for kii, vii in vi.items()}
 
 def _first_key(kv):
+   """
+   get the first key of a dict
+   """
    return list(kv.keys())[0]
 
 def _first_val(kv):
+   """
+   get the first val of a dict
+   """
    return list(kv.values())[0]
 
 def _merge(ds):
+   """
+   Merge a list of dicts into one dict
+   """
    d = {}
    for di in ds:
       d.update(di)
@@ -140,7 +155,7 @@ def generate_job_defs(path):
       # in the template
       params = {}
       for ks, v in vals.items():
-         # each variable is a tuple of keys followed by the value
+         # each variable is a tuple of keys and the value
          # we can have multiple keys because we can have deep branches of possibitilies
          # so as many keys as we go deep
          # (k1, k2, ..., v)

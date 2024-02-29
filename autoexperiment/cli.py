@@ -7,7 +7,7 @@ from autoexperiment.manager import manage_jobs_forever
 
 
 def main():
-    return clize_run([build, run])
+    return clize_run([build, run, build_and_run])
 
 
 def build(config):

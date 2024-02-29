@@ -26,7 +26,7 @@ def build(config):
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
 
-def run(config):
+def run(config, *params, dry=False):
     """
     Manage/schedule jobs corresponding to a config file after
     having generated the sbatch scripts.
@@ -36,14 +36,26 @@ def run(config):
          print("Please specify a config file")
          return 1
     jobdefs = generate_job_defs(config)
+    if params:
+        # filter jobs by params
+        params_dict = {}
+        for param in params:
+            assert "=" in param, "Invalid param format. Please use key=value."
+            key, value = param.split("=")
+            params_dict[key] = value
+        jobdefs = [jobdef for jobdef in jobdefs if all(jobdef.params.get(k) == v for k, v in params_dict.items())]
+    if dry:
+        for jobdef in jobdefs:
+            print(jobdef.params["name"])
+        return
     manage_jobs_forever(jobdefs)
 
-def build_and_run(config):
+def build_and_run(config, *params, dry=False):
     """
     do both above at the same time, for simplicity
     """
     build(config)
-    run(config)
+    run(config, *params, dry=dry)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

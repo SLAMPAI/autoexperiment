@@ -86,7 +86,7 @@ def product_recursive(cfg):
          {(x,val:2), (x,r):5, (y,val):4, (y,r):6},
       ]
    """
-   if type(cfg) in (str, int, float):
+   if type(cfg) in (str, int, float, bool):
       return [{tuple(): cfg}]
    elif type(cfg) == ListConfig:
       if all(type(vi) == DictConfig and len(vi) == 1 for vi in cfg):
@@ -98,7 +98,7 @@ def product_recursive(cfg):
             vals = [_add_key(k, vi) for vi in product_recursive(v)]
             all_vals.extend(vals)
          return all_vals
-      elif all(type(vi) in (str, int, float) for vi in cfg):
+      elif all(type(vi) in (str, int, float, bool) for vi in cfg):
          # list of str/int/float values
          return  [{tuple(): vi} for vi in cfg]
       else:

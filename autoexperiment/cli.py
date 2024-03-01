@@ -42,8 +42,8 @@ def run(config, *params, dry=False):
         for param in params:
             assert "=" in param, "Invalid param format. Please use key=value."
             key, value = param.split("=")
-            params_dict[key] = value
-        jobdefs = [jobdef for jobdef in jobdefs if all(str(jobdef.params.get(k)) == v for k, v in params_dict.items())]
+            params_dict[key] = value.split(",")
+        jobdefs = [jobdef for jobdef in jobdefs if all(str(jobdef.params.get(k)) in vs for k, vs in params_dict.items())]
     if dry:
         for jobdef in jobdefs:
             print(jobdef.params["name"])

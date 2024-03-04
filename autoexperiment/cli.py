@@ -2,12 +2,13 @@
 from clize import run as clize_run
 import sys
 import os
+from subprocess import call
 from autoexperiment.template import generate_job_defs
 from autoexperiment.manager import manage_jobs_forever
 
 
 def main():
-    return clize_run([build, run, build_and_run])
+    return clize_run([build, run, build_and_run, for_each])
 
 
 def build(config):
@@ -56,6 +57,12 @@ def build_and_run(config, *params, dry=False):
     """
     build(config)
     run(config, *params, dry=dry)
+
+def for_each(config, cmd):
+    jobdefs = generate_job_defs(config)
+    for jobdef in jobdefs:
+        cmd_ = cmd.format(**jobdef.params)
+        call(cmd_, shell=True)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

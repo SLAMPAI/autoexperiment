@@ -22,7 +22,7 @@ def build(config):
     jobdefs = generate_job_defs(config)
     for jobdef in jobdefs:
        os.makedirs(os.path.dirname(jobdef.sbatch_script), exist_ok=True)
-       print(jobdef.sbatch_script)
+       print(f"Building '{jobdef.sbatch_script}'...")
        with open(f"{jobdef.sbatch_script}", "w") as f:
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)

@@ -27,7 +27,7 @@ def build(config):
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
 
-def run(config, *params, dry=False):
+def run(config, *params, dry=False, verbose=1):
     """
     Manage/schedule jobs corresponding to a config file after
     having generated the sbatch scripts.
@@ -49,14 +49,16 @@ def run(config, *params, dry=False):
         for jobdef in jobdefs:
             print(jobdef.params["name"])
         return
+    for job in jobdefs:
+        job.verbose = verbose
     manage_jobs_forever(jobdefs)
 
-def build_and_run(config, *params, dry=False):
+def build_and_run(config, *params, dry=False, verbose=1):
     """
     do both above at the same time, for simplicity
     """
     build(config)
-    run(config, *params, dry=dry)
+    run(config, *params, dry=dry, verbose=verbose)
 
 def for_each(config, cmd):
     jobdefs = generate_job_defs(config)

@@ -1,7 +1,8 @@
 import os
 import re
+import sys
 import time
-from subprocess import call, check_output
+from subprocess import call, check_output, DEVNULL
 from dataclasses import dataclass
 import asyncio
 
@@ -33,9 +34,9 @@ async def manage_job(job):
         resume_job_id = int(job_ids[-1]) if len(job_ids) > 0 else None
     else:
         resume_job_id = None
-    
+    stderr = sys.stderr if verbose >= 2 else DEVNULL
     while True:
-        if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd):
+        if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
             if verbose:
                 print(f"Finishing {job.name}")
             return
@@ -45,7 +46,7 @@ async def manage_job(job):
             # otherwise, start the job
             if verbose:
                 print(f"Checking start condition of {job.name}...")
-            value = int(check_output(start_condition_cmd, shell=True))
+            value = int(check_output(start_condition_cmd, shell=True, stderr=stderr))
             if value != 1:
                 if verbose:
                     print(f"Start condition returned {value}, not starting for {job.name}, retrying again in {check_interval_secs//60} mins.")
@@ -59,7 +60,7 @@ async def manage_job(job):
             resume_job_id = None
         else:
             # launch job
-            output = check_output(cmd, shell=True).decode()
+            output = check_output(cmd, shell=True, stderr=stderr).decode()
             if verbose:
                 print(f"Launch a new job for {job.name}")
             # get job id
@@ -80,13 +81,13 @@ async def manage_job(job):
             # frozen. Then the same process is repeated.
 
             try:
-                data = check_output(cmd_check_job_in_queue.format(job_id=job_id), shell=True).decode()
+                data = check_output(cmd_check_job_in_queue.format(job_id=job_id), shell=True, stderr=stderr).decode()
             except Exception as ex:
                 # Exception after checking, which means that the job id no longer exists.
                 # In this case, we wait and relaunch, except if termination string is found
                 if verbose:
                     print(ex)
-                if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd):
+                if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
                     if verbose:
                         print(f"Finishing {job.name}")
                     return
@@ -96,13 +97,13 @@ async def manage_job(job):
                 break
             # if job is not present in the queue, relaunch it directly, except if termination string is found
             if str(job_id) not in data:
-                if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd):
+                if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
                     if verbose:
                         print(f"Finishing {job.name}")
                     return
                 break
             # Check first if job is specifically on a running state (to avoid the case where it is on pending state etc)
-            data = check_output(cmd_check_job_running.format(job_id=job_id), shell=True).decode()
+            data = check_output(cmd_check_job_running.format(job_id=job_id), shell=True, stderr=stderr).decode()
             if str(job_id) in data:
                 # job on running state
                 if not os.path.exists(output_file):
@@ -132,10 +133,10 @@ async def manage_job(job):
                 await asyncio.sleep(check_interval_secs)
  
 
-def check_if_done(logfile, termination_str='', termination_cmd=''):
+def check_if_done(logfile, termination_str='', termination_cmd='', verbose=True):
     return (
         (os.path.exists(logfile) and (termination_str != "") and re.search(termination_str, open(logfile).read())) or 
-        (termination_cmd and int(check_output(termination_cmd, shell=True)) == 1)
+        (termination_cmd and int(check_output(termination_cmd, shell=True, stderr=sys.stderr if verbose else DEVNULL)) == 1)
     )
 
 def get_file_content(output_file):

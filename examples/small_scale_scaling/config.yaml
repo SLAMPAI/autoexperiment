@@ -18,7 +18,7 @@ mode:
       # terminate training if we detect that last epoch is finished
       # e.g. if number of epochs is 100 and we find the expression Train Epoch: 99 .... 100%, we return 1
       # thus terminating the job.
-      termination_cmd: 'let last={epochs}-1;grep "Train Epoch: $last.*100%" {output_file}|wc -l'
+      termination_cmd: 'let last={epochs}-1;ne=`grep "Train Epoch: $last.*100%" {output_file}|wc -l`;echo $(( (ne) >= 1 ))'
   - eval:
       template: eval.sbatch
       sbatch_script: "sbatch_scripts/{name}_eval.sbatch"

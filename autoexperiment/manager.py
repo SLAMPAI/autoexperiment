@@ -30,7 +30,7 @@ async def manage_job(job):
     if os.path.exists(output_file):
         # look for job id from the output file
         # if exists, then resume from this job id
-        job_ids = re.findall(job.job_id_regexp, open(output_file).read())
+        job_ids = re.findall(job.job_id_regexp, get_file_content(output_file))
         resume_job_id = int(job_ids[-1]) if len(job_ids) > 0 else None
     else:
         resume_job_id = None
@@ -138,7 +138,7 @@ def check_if_done(logfile, termination_str='', termination_cmd='', verbose=0):
     )
 
 def get_file_content(output_file):
-    return open(output_file).read()
+    return open(output_file, errors='ignore').read()
 
 def get_job_id(s):
     try:

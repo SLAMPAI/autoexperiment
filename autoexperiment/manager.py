@@ -9,12 +9,20 @@ import asyncio
 cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
    
-def manage_jobs_forever(jobs):
+def manage_jobs_forever(jobs, max_jobs=None):
     """
     Manage a list of jobs forever, relaunching them if they are frozen or not running anymore.
     """
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.gather(*[manage_job(job) for job in jobs]))
+    if max_jobs:
+       sem = asyncio.Semaphore(max_jobs)
+       async def manage_job_with_limits(job):
+          async with sem:
+             return await manage_job(job)
+       loop.run_until_complete(asyncio.gather(*[manage_job_with_limits(job) for job in jobs]))
+    else:
+       loop.run_until_complete(asyncio.gather(*[manage_job(job) for job in jobs]))
+
 
 async def manage_job(job):
     """

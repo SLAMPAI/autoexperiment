@@ -166,15 +166,27 @@ def generate_job_defs(path):
             params[ki] = kin
          # last key goes to the actual value
          params[ks[-1]] = v
-      # if value of a variable is a template format (e.g., '{dataset}_{lr}'), replace the keys
-      # by the values.
-      # keep doing until no key needs to be replaced
+      # if value of a variable is a template format (e.g., '{dataset}_{lr}') or an expression e.g. 'expr({lr} * 0.001))', 
+      # replace the values by the evaluated expression.
+      # keep doing until no value needs to be evaluated.
       while True:
          old_params = params.copy()
+         evaled_params = {k: v for k, v in old_params.items() if not _is_expr(v)}
          for k, v in params.items():
             try:
-               params[k] = old_params[k].format(**old_params)
+               params[k] = old_params[k].format(**evaled_params)
             except Exception as ex:
+               # exception happens when some variables do not exist.
+               # TODO possibility to log these
+               pass
+
+            ## evaluate expressions
+            try:
+               if _is_expr(v):
+                  params[k] = _eval_expr(v)
+            except Exception as ex:
+               # exception happens when expression has wrong syntax.
+               # TODO possibility to log these
                pass
          if old_params == params:
             break
@@ -208,3 +220,12 @@ def _auto_name(params):
         v = params[k]
         name += f"{k}={v}_"
     return name[:-1]
+
+def _is_expr(e):
+   return type(e) == str and e.startswith("expr(") and e.endswith(")")
+
+def _eval_expr(e):
+   assert _is_expr(e)
+   start = len("expr(")
+   end = -1
+   return eval(e[start:end])

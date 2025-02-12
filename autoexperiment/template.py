@@ -179,7 +179,7 @@ def generate_job_defs(path):
                # exception happens when some variables do not exist.
                # TODO possibility to log these
                pass
-
+            v = params[k]
             ## evaluate expressions
             try:
                if _is_expr(v):

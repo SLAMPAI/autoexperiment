@@ -29,9 +29,14 @@ class JobDef:
    termination_str: str = ""
    # command to check to terminate the job (alternative to termination_str)
    termination_cmd: str = ""
-   # if true, print more logging info
-   verbose: bool = True
  
+MANDATORY_FIELDS =[
+   "name",
+   "template",
+   "output_file",
+   "cmd",
+   "sbatch_script",
+]
 
 
 def product_recursive(cfg):
@@ -187,7 +192,10 @@ def generate_job_defs(path, verbose=0):
                # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
                # but we make sure to throw a warning
                if verbose > 0:
-                  warnings.warn(f"{ex}: Cannot set value for {old_params[k]}'" + f" with params {evaled_params}" if verbose==2 else "")
+                  msg = (f"Cannot set value for {old_params[k]}' (Exception: {ex})")
+                  if verbose == 2:
+                     msg += f" with params {evaled_params}"
+                  warnings.warn(msg)
             
             # get the (possible) new value of the variable
             v = params[k]
@@ -200,7 +208,7 @@ def generate_job_defs(path, verbose=0):
                # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
                # but we make sure to throw a warning.
                if verbose > 0:
-                  warnings.warn(f"{ex}: Cannot set value for '{k}' with expression '{v}'")
+                  warnings.warn(f"Cannot set value for '{k}' with expression '{v}' (Exception: {ex})")
          if old_params == params:
             break
       # at this point, we can use the template file to generate the config file
@@ -219,6 +227,8 @@ def generate_job_defs(path, verbose=0):
       for field in fields(jobdef):
          if field.name in params:
             setattr(jobdef, field.name, params[field.name])
+         elif field.name in MANDATORY_FIELDS:
+            raise ValueError(f"Field '{field.name}' is a not provided, but is MANDATORY")
       jobs.append(jobdef)
    return jobs
 

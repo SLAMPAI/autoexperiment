@@ -9,7 +9,7 @@ import asyncio
 cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
    
-def manage_jobs_forever(jobs, max_jobs=None):
+def manage_jobs_forever(jobs, max_jobs=None, verbose=0):
     """
     Manage a list of jobs forever, relaunching them if they are frozen or not running anymore.
     """
@@ -18,13 +18,13 @@ def manage_jobs_forever(jobs, max_jobs=None):
        sem = asyncio.Semaphore(max_jobs)
        async def manage_job_with_limits(job):
           async with sem:
-             return await manage_job(job)
-       loop.run_until_complete(asyncio.gather(*[manage_job_with_limits(job) for job in jobs]))
+             return await manage_job(job, verbose=verbose)
+       loop.run_until_complete(asyncio.gather(*[manage_job_with_limits(job, verbose=verbose) for job in jobs]))
     else:
-       loop.run_until_complete(asyncio.gather(*[manage_job(job) for job in jobs]))
+       loop.run_until_complete(asyncio.gather(*[manage_job(job, verbose=verbose) for job in jobs]))
 
 
-async def manage_job(job):
+async def manage_job(job, verbose=0):
     """
     Manage a single job, relaunching it if it is frozen or not running anymore.
     """
@@ -34,7 +34,6 @@ async def manage_job(job):
     start_condition_cmd = job.start_condition_cmd
     termination_str = job.termination_str
     termination_cmd = job.termination_cmd
-    verbose = job.verbose
     if os.path.exists(output_file):
         # look for job id from the output file
         # if exists, then resume from this job id

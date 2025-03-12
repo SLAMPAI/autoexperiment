@@ -49,9 +49,7 @@ def run(config, *params, dry=False, verbose=1, max_jobs:int=None):
         for jobdef in jobdefs:
             print(jobdef.params["name"])
         return
-    for job in jobdefs:
-        job.verbose = verbose
-    manage_jobs_forever(jobdefs, max_jobs=max_jobs)
+    manage_jobs_forever(jobdefs, max_jobs=max_jobs, verbose=verbose)
 
 def build_and_run(config, *params, dry=False, verbose=0):
     """

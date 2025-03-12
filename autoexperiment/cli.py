@@ -11,7 +11,7 @@ def main():
     return clize_run([build, run, build_and_run, for_each])
 
 
-def build(config):
+def build(config, *, verbose=1):
     """
     Generate sbatch scripts from a yaml config file that
     defines a set of experiments to do.
@@ -19,7 +19,7 @@ def build(config):
     if not config:
          print("Please specify a config file")
          return 1
-    jobdefs = generate_job_defs(config)
+    jobdefs = generate_job_defs(config, verbose=verbose)
     for jobdef in jobdefs:
        os.makedirs(os.path.dirname(jobdef.sbatch_script), exist_ok=True)
        print(f"Building '{jobdef.sbatch_script}'...")
@@ -27,7 +27,7 @@ def build(config):
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
 
-def run(config, *params, dry=False, verbose=0, max_jobs:int=None):
+def run(config, *params, dry=False, verbose=1, max_jobs:int=None):
     """
     Manage/schedule jobs corresponding to a config file after
     having generated the sbatch scripts.

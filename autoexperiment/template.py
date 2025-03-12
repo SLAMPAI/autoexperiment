@@ -1,3 +1,4 @@
+import warnings
 from omegaconf import OmegaConf, DictConfig, ListConfig
 from itertools import product
 from dataclasses import dataclass, fields
@@ -142,7 +143,7 @@ def _merge(ds):
       d.update(di)
    return d
 
-def generate_job_defs(path):
+def generate_job_defs(path, verbose=0):
    """
    Returns a list of JobDef from a config file (config.yaml)
    the JobDef list can directly be used by the manager to schedule/manage the jobs
@@ -172,22 +173,34 @@ def generate_job_defs(path):
       while True:
          old_params = params.copy()
          evaled_params = {k: v for k, v in old_params.items() if not _is_expr(v)}
-         for k, v in params.items():
+         for k in params.keys():
+            
+            # if the value is not a string, we skip it
+            # as we only evaluate strings
+            if type(old_params[k]) != str:
+               continue
+            
             try:
                params[k] = old_params[k].format(**evaled_params)
             except Exception as ex:
-               # exception happens when some variables do not exist.
-               # TODO possibility to log these
-               pass
+               # exception happens when some variables needed in the template do not exist (yet) in `evaled_params`, or expression is invalid.
+               # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
+               # but we make sure to throw a warning
+               if verbose > 0:
+                  warnings.warn(f"{ex}: Cannot set value for {old_params[k]}'" + f" with params {evaled_params}" if verbose==2 else "")
+            
+            # get the (possible) new value of the variable
             v = params[k]
             ## evaluate expressions
             try:
                if _is_expr(v):
                   params[k] = _eval_expr(v)
             except Exception as ex:
-               # exception happens when expression has wrong syntax.
-               # TODO possibility to log these
-               pass
+               # exception happens when some variables needed in the template do not exist (yet) in `evaled_params`, or expression is invalid.
+               # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
+               # but we make sure to throw a warning.
+               if verbose > 0:
+                  warnings.warn(f"{ex}: Cannot set value for '{k}' with expression '{v}'")
          if old_params == params:
             break
       # at this point, we can use the template file to generate the config file

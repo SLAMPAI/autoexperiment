@@ -13,7 +13,7 @@ class JobDef:
    config: str = ""
    # name of the job
    name: str = ""
-   # regexp to extract job id from the output file
+   # regexp to extract job id from the output file, useful for resuming jobs
    job_id_regexp: str = "Job Id:([0-9]+)"
    # output file path of the job
    output_file: str = "slurm.out"
@@ -36,6 +36,7 @@ MANDATORY_FIELDS =[
    "output_file",
    "cmd",
    "sbatch_script",
+   "job_id_regexp"
 ]
 
 

@@ -19,7 +19,7 @@ def manage_jobs_forever(jobs, max_jobs=None, verbose=0):
        async def manage_job_with_limits(job):
           async with sem:
              return await manage_job(job, verbose=verbose)
-       loop.run_until_complete(asyncio.gather(*[manage_job_with_limits(job, verbose=verbose) for job in jobs]))
+       loop.run_until_complete(asyncio.gather(*[manage_job_with_limits(job) for job in jobs]))
     else:
        loop.run_until_complete(asyncio.gather(*[manage_job(job, verbose=verbose) for job in jobs]))
 

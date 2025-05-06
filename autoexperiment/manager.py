@@ -8,7 +8,7 @@ import asyncio
 
 cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
-cmd_check_job_id_by_name = "squeue -n {job_name} --format %i"
+cmd_check_job_id_by_name = "squeue --me -n {job_name} --format %i"
 
 def manage_jobs_forever(jobs, max_jobs=None, verbose=0):
     """
@@ -35,18 +35,19 @@ async def manage_job(job, verbose=0):
     start_condition_cmd = job.start_condition_cmd
     termination_str = job.termination_str
     termination_cmd = job.termination_cmd
-    
+    stderr = sys.stderr if verbose >= 2 else DEVNULL
 
     # Get job id from the queue based on the name
-    data = check_output(cmd_check_job_id_by_name.format(job_name=job.name), shell=True, stderr=stderr)
-    job_ids = [line for line in data.split("\\") if re.match('[0-9]+', line)]
+    data = check_output(cmd_check_job_id_by_name.format(job_name=job.name), shell=True, stderr=stderr).decode()
+    job_ids = [line for line in data.split("\n") if re.match('[0-9]+', line)]
     if len(job_ids) == 1:
         # only extract job id if there are no duplicate names
         existing_job_id = int(job_ids[0])
+        # TODO can fail if different autoexp sessions use same names, one must ensure that it is not the case!
     else:
         if os.path.exists(output_file):
             if len(job_ids) >= 2 and verbose > 1:
-                print(f"Attempt to resume, but found duplicate jobs with same name: '{job.name'}, checking directly job id from output file...")
+                print(f"Attempt to resume, but found duplicate jobs with same name: '{job.name}', checking directly job id from output file using re '{job.job_id_regexp}'...")
             # look for job id from the output file
             # if exists, then resume from this job id
             job_ids = re.findall(job.job_id_regexp, get_file_content(output_file))
@@ -54,7 +55,6 @@ async def manage_job(job, verbose=0):
         else:
             existing_job_id = None
 
-    stderr = sys.stderr if verbose >= 2 else DEVNULL
     while True:
         if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
             print(f"Job '{job.name}' is finished")

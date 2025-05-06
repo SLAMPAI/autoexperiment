@@ -8,7 +8,8 @@ import asyncio
 
 cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
-   
+cmd_check_job_id_by_name = "squeue -n {job_name} --format %i"
+
 def manage_jobs_forever(jobs, max_jobs=None, verbose=0):
     """
     Manage a list of jobs forever, relaunching them if they are frozen or not running anymore.
@@ -34,13 +35,25 @@ async def manage_job(job, verbose=0):
     start_condition_cmd = job.start_condition_cmd
     termination_str = job.termination_str
     termination_cmd = job.termination_cmd
-    if os.path.exists(output_file):
-        # look for job id from the output file
-        # if exists, then resume from this job id
-        job_ids = re.findall(job.job_id_regexp, get_file_content(output_file))
-        resume_job_id = int(job_ids[-1]) if len(job_ids) > 0 else None
+    
+
+    # Get job id from the queue based on the name
+    data = check_output(cmd_check_job_id_by_name.format(job_name=job.name), shell=True, stderr=stderr)
+    job_ids = [line for line in data.split("\\") if re.match('[0-9]+', line)]
+    if len(job_ids) == 1:
+        # only extract job id if there are no duplicate names
+        existing_job_id = int(job_ids[0])
     else:
-        resume_job_id = None
+        if os.path.exists(output_file):
+            if len(job_ids) >= 2 and verbose > 1:
+                print(f"Attempt to resume, but found duplicate jobs with same name: '{job.name'}, checking directly job id from output file...")
+            # look for job id from the output file
+            # if exists, then resume from this job id
+            job_ids = re.findall(job.job_id_regexp, get_file_content(output_file))
+            existing_job_id = int(job_ids[-1]) if len(job_ids) > 0 else None
+        else:
+            existing_job_id = None
+
     stderr = sys.stderr if verbose >= 2 else DEVNULL
     while True:
         if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
@@ -59,11 +72,11 @@ async def manage_job(job, verbose=0):
                 await asyncio.sleep(check_interval_secs)
                 continue
 
-        if resume_job_id is not None:
+        if existing_job_id is not None:
             if verbose:
-                print(f"Resume {job.name} from job id: {resume_job_id}")
-            job_id = resume_job_id
-            resume_job_id = None
+                print(f"Resume {job.name} from job id: {existing_job_id}")
+            job_id = existing_job_id
+            existing_job_id = None
         else:
             # launch job
             output = check_output(cmd, shell=True, stderr=stderr).decode()

@@ -40,9 +40,14 @@ async def manage_job(job, verbose=0):
     # Get job id from the queue based on the name
 
     sbatch_script = cmd.split()[1]
-    job_name = re.search("--job-name=(.*)", get_file_content(sbatch_script) ).group(1)
-    data = check_output(cmd_check_job_id_by_name.format(job_name=job_name), shell=True, stderr=stderr).decode()
-    job_ids = [line for line in data.split("\n") if re.match('[0-9]+', line)]
+    pat = re.search("--job-name=(.*)", get_file_content(sbatch_script) )
+    if pat is not None:
+        job_name = pat.group(1)
+        data = check_output(cmd_check_job_id_by_name.format(job_name=job_name), shell=True, stderr=stderr).decode()
+        job_ids = [line for line in data.split("\n") if re.match('[0-9]+', line)]
+    else:
+        job_ids = []
+    
     if len(job_ids) == 1:
         # only extract job id if there are no duplicate names
         existing_job_id = int(job_ids[0])

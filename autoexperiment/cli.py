@@ -21,10 +21,6 @@ def build(config, *, verbose=1):
          print("Please specify a config file")
          return 1
     jobdefs = generate_job_defs(config, verbose=verbose)
-    names = [jobdef.name for jobdef in jobdefs]
-    if len(names) != len(set(names)):
-        warnings.warn("Job names (field `name`) are not unique, this will make resuming ambiguous, and same jobs can be launched more than once. Please make sure job names are unique to avoid this behavior.")
-    return
     for jobdef in jobdefs:
        os.makedirs(os.path.dirname(jobdef.sbatch_script), exist_ok=True)
        print(f"Building '{jobdef.sbatch_script}'...")

@@ -228,6 +228,7 @@ def generate_job_defs(path, verbose=0):
          elif field.name in MANDATORY_FIELDS:
             raise ValueError(f"Field '{field.name}' is a not provided, but is MANDATORY")
       jobs.append(jobdef)
+   _check_name_uniqueness(jobs)
    return jobs
 
 
@@ -250,3 +251,12 @@ def _eval_expr(e):
    start = len("expr(")
    end = -1
    return eval(e[start:end])
+
+def _check_name_uniqueness(jobdefs):
+    """
+    Check that all job names are unique.
+    """
+    names = [jobdef.name for jobdef in jobdefs]
+    if len(names) != len(set(names)):
+        raise ValueError("Job names must be unique. Found duplicates: {}".format(
+            [name for name in set(names) if names.count(name) > 1]))

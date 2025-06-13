@@ -2,6 +2,7 @@
 from clize import run as clize_run
 import sys
 import os
+import warnings
 from subprocess import call
 from autoexperiment.template import generate_job_defs
 from autoexperiment.manager import manage_jobs_forever

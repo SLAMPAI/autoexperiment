@@ -11,11 +11,9 @@ class JobDef:
    # resulting config file used for job
    # after applied to the template
    config: str = ""
-   # name of the job
+   # name of the job, have to be UNIQUE, used to identify a job, and have to be assigned to SLURM jobname in the SBATCH script.
    name: str = ""
-   # regexp to extract job id from the output file, useful for resuming jobs
-   job_id_regexp: str = "Job Id:([0-9]+)"
-   # output file path of the job
+   # output file path of the job: used to check if job is hanging or not. If no output for log interval, job is restarted. 
    output_file: str = "slurm.out"
    # command to run for the job
    cmd: str = "sbatch run.sbatch"
@@ -36,7 +34,6 @@ MANDATORY_FIELDS =[
    "output_file",
    "cmd",
    "sbatch_script",
-   "job_id_regexp"
 ]
 
 

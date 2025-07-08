@@ -1,5 +1,6 @@
 """Console script for autoexperiment."""
 from clize import run as clize_run
+from clize.parameters import multi
 import sys
 import os
 import warnings
@@ -28,7 +29,7 @@ def build(config, *, verbose=1):
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
 
-def run(config, *params, dry=False, verbose=1, max_jobs:int=None):
+def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:multi()):
     """
     Manage/schedule jobs corresponding to a config file after
     having generated the sbatch scripts.
@@ -46,6 +47,12 @@ def run(config, *params, dry=False, verbose=1, max_jobs:int=None):
             key, value = param.split("=")
             params_dict[key] = value.split(",")
         jobdefs = [jobdef for jobdef in jobdefs if all(str(jobdef.params.get(k)) in vs for k, vs in params_dict.items())]
+    if fix:
+        for param in fix:
+            assert "=" in param, "Invalid param format. Please use key=value."
+            key, value = param.split("=")
+            for jobdef in jobdefs:
+                jobdef.params[key] = value
     if dry:
         for jobdef in jobdefs:
             print(jobdef.params["name"])

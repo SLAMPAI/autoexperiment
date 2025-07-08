@@ -1,4 +1,5 @@
 """Console script for autoexperiment."""
+from omegaconf import OmegaConf
 from clize import run as clize_run
 from clize.parameters import multi
 import sys
@@ -13,7 +14,7 @@ def main():
     return clize_run([build, run, build_and_run, for_each])
 
 
-def build(config, *, verbose=1):
+def build(config, *, fix:multi(), verbose=1):
     """
     Generate sbatch scripts from a yaml config file that
     defines a set of experiments to do.
@@ -21,7 +22,13 @@ def build(config, *, verbose=1):
     if not config:
          print("Please specify a config file")
          return 1
-    jobdefs = generate_job_defs(config, verbose=verbose)
+    cfg = OmegaConf.load(config)
+    if fix:
+        for param in fix:
+            assert "=" in param, "Invalid param format. Please use key=value."
+            key, value = param.split("=")
+            cfg[key] = value       
+    jobdefs = generate_job_defs(cfg, verbose=verbose)
     for jobdef in jobdefs:
        os.makedirs(os.path.dirname(jobdef.sbatch_script), exist_ok=True)
        print(f"Building '{jobdef.sbatch_script}'...")
@@ -38,7 +45,13 @@ def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:multi()):
     if not config:
          print("Please specify a config file")
          return 1
-    jobdefs = generate_job_defs(config)
+    cfg = OmegaConf.load(config)
+    if fix:
+        for param in fix:
+            assert "=" in param, "Invalid param format. Please use key=value."
+            key, value = param.split("=")
+            cfg[key] = value
+    jobdefs = generate_job_defs(cfg, verbose=verbose)
     if params:
         # filter jobs by params
         params_dict = {}
@@ -47,12 +60,6 @@ def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:multi()):
             key, value = param.split("=")
             params_dict[key] = value.split(",")
         jobdefs = [jobdef for jobdef in jobdefs if all(str(jobdef.params.get(k)) in vs for k, vs in params_dict.items())]
-    if fix:
-        for param in fix:
-            assert "=" in param, "Invalid param format. Please use key=value."
-            key, value = param.split("=")
-            for jobdef in jobdefs:
-                jobdef.params[key] = value
     if dry:
         for jobdef in jobdefs:
             print(jobdef.params["name"])

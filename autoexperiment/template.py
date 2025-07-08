@@ -146,12 +146,11 @@ def _merge(ds):
       d.update(di)
    return d
 
-def generate_job_defs(path, verbose=0):
+def generate_job_defs(cfg, verbose=0):
    """
    Returns a list of JobDef from a config file (config.yaml)
    the JobDef list can directly be used by the manager to schedule/manage the jobs
    """
-   cfg = OmegaConf.load(path)
    jobs = []
    for vals in product_recursive(cfg):
       # params will store the key-value pairs

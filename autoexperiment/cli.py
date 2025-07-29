@@ -14,7 +14,7 @@ def main():
     return clize_run([build, run, build_and_run, for_each])
 
 
-def build(config, *, fix:multi(), verbose=1):
+def build(config, *, fix:('f', multi()), verbose=1):
     """
     Generate sbatch scripts from a yaml config file that
     defines a set of experiments to do.
@@ -36,7 +36,7 @@ def build(config, *, fix:multi(), verbose=1):
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
 
-def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:multi()):
+def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:('f', multi())):
     """
     Manage/schedule jobs corresponding to a config file after
     having generated the sbatch scripts.
@@ -66,12 +66,12 @@ def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:multi()):
         return
     manage_jobs_forever(jobdefs, max_jobs=max_jobs, verbose=verbose)
 
-def build_and_run(config, *params, dry=False, verbose=0):
+def build_and_run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:('f', multi())):
     """
     do both above at the same time, for simplicity
     """
-    build(config)
-    run(config, *params, dry=dry, verbose=verbose)
+    build(config, fix=fix, verbose=verbose)
+    run(config, *params, dry=dry, verbose=verbose, max_jobs=max_jobs, fix=fix)
 
 def for_each(config, cmd):
     jobdefs = generate_job_defs(config)

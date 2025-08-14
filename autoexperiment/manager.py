@@ -2,7 +2,8 @@ import os
 import re
 import sys
 import time
-from subprocess import call, check_output, DEVNULL
+
+from subprocess import call, check_output, DEVNULL, CalledProcessError
 from dataclasses import dataclass
 import asyncio
 
@@ -10,19 +11,12 @@ cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
 cmd_check_job_id_by_name = "squeue --me -n {job_name} --format %i"
 
-def manage_jobs_forever(jobs, max_jobs=None, verbose=0):
+def manage_jobs_forever(jobs, verbose=0):
     """
     Manage a list of jobs forever, relaunching them if they are frozen or not running anymore.
     """
     loop = asyncio.get_event_loop()
-    if max_jobs:
-       sem = asyncio.Semaphore(max_jobs)
-       async def manage_job_with_limits(job):
-          async with sem:
-             return await manage_job(job, verbose=verbose)
-       loop.run_until_complete(asyncio.gather(*[manage_job_with_limits(job) for job in jobs]))
-    else:
-       loop.run_until_complete(asyncio.gather(*[manage_job(job, verbose=verbose) for job in jobs]))
+    loop.run_until_complete(asyncio.gather(*[manage_job(job, verbose=verbose) for job in jobs]))
 
 
 async def manage_job(job, verbose=0):
@@ -76,14 +70,18 @@ async def manage_job(job, verbose=0):
             existing_job_id = None
         else:
             # launch job
-            output = check_output(cmd, shell=True, stderr=stderr).decode()
-            if verbose:
-                print(f"Launch a new job for {job.name}")
-            # get job id
-            job_id = get_job_id(output)
+            try:
+                output = check_output(cmd, shell=True, stderr=stderr).decode()
+                if verbose:
+                    print(f"Launch a new job for {job.name}")
+                # get job id
+                job_id = get_job_id(output)
+            except CalledProcessError:
+                job_id = None
+            
             if job_id is None:
                 if verbose:
-                    print("Cannot find job id in: {output} for {job.name}")
+                    print(f"Cannot find job id in: {output} for {job.name}")
                     print(f"Retrying again in {check_interval_secs//60} mins...")
                 await asyncio.sleep(check_interval_secs)
                 continue

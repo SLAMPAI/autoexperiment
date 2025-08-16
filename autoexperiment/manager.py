@@ -11,15 +11,49 @@ cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
 cmd_check_job_id_by_name = "squeue --me -n {job_name} --format %i"
 
-def manage_jobs_forever(jobs, verbose=0):
+
+class JobLimitsManager:
+    def __init__(self, max_jobs=None):
+        self.max_jobs = max_jobs
+        self.lock = asyncio.Lock()
+        self.condition = asyncio.Condition(self.lock)
+        
+        # Single counter: total jobs submitted to SLURM (any state)
+        self.jobs_submitted = 0
+        
+    async def wait_for_slot(self):
+        """Wait until we can submit a new job to SLURM"""
+        if not self.max_jobs:
+            return  # No limit set
+            
+        async with self.condition:
+            while self.jobs_submitted >= self.max_jobs:
+                await self.condition.wait()
+    
+    async def job_submitted(self):
+        """Called when we successfully submit a job to SLURM"""
+        async with self.condition:
+            self.jobs_submitted += 1
+    
+    async def job_finished(self):
+        """Called when job is completely done and removed from SLURM"""
+        async with self.condition:
+            if self.jobs_submitted > 0:
+                self.jobs_submitted -= 1
+            self.condition.notify_all()  # Wake waiting jobs
+
+def manage_jobs_forever(jobs, max_jobs:int=None, verbose=0):
     """
     Manage a list of jobs forever, relaunching them if they are frozen or not running anymore.
     """
+    limits_manager = JobLimitsManager(max_jobs) if max_jobs is not None else None
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.gather(*[manage_job(job, verbose=verbose) for job in jobs]))
+    loop.run_until_complete(asyncio.gather(*[
+        manage_job(job, limits_manager, verbose=verbose) for job in jobs
+    ]))
 
 
-async def manage_job(job, verbose=0):
+async def manage_job(job, limits_manager=None, verbose=0):
     """
     Manage a single job, relaunching it if it is frozen or not running anymore.
     """
@@ -48,6 +82,8 @@ async def manage_job(job, verbose=0):
 
     while True:
         if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
+            if limits_manager:
+                await limits_manager.job_finished()
             print(f"Job '{job.name}' is finished")
             return
         if start_condition_cmd:
@@ -68,7 +104,17 @@ async def manage_job(job, verbose=0):
                 print(f"Resume {job.name} from job id: {existing_job_id}")
             job_id = existing_job_id
             existing_job_id = None
+            
+            # Count existing job toward our limits
+            if limits_manager:
+                await limits_manager.job_submitted()
         else:
+            # Wait for job slot before launching
+            if limits_manager:
+                await limits_manager.wait_for_slot()
+                if verbose:
+                    print(f"Slot available, launching job for {job.name}")
+            
             # launch job
             try:
                 output = check_output(cmd, shell=True, stderr=stderr).decode()
@@ -76,6 +122,8 @@ async def manage_job(job, verbose=0):
                     print(f"Launch a new job for {job.name}")
                 # get job id
                 job_id = get_job_id(output)
+                if job_id is not None and limits_manager:
+                    await limits_manager.job_submitted()
             except CalledProcessError:
                 job_id = None
             
@@ -102,8 +150,11 @@ async def manage_job(job, verbose=0):
                 if verbose:
                     print(ex)
                 if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
+                    if limits_manager:
+                        await limits_manager.job_finished()
                     print(f"Job '{job.name}' is finished")
                     return
+                # Job will be relaunched - don't call job_finished() yet
                 if verbose:
                     print(f"Retrying again in {check_interval_secs//60} mins for {job.name}...")
                 await asyncio.sleep(check_interval_secs)
@@ -111,8 +162,11 @@ async def manage_job(job, verbose=0):
             # if job is not present in the queue, relaunch it directly, except if termination string is found
             if str(job_id) not in data:
                 if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
+                    if limits_manager:
+                        await limits_manager.job_finished()
                     print(f"Job '{job.name}' is finished")
                     return
+                # Job will be relaunched - don't call job_finished() yet
                 break
             # Check first if job is specifically on a running state (to avoid the case where it is on pending state etc)
             data = check_output(cmd_check_job_running.format(job_id=job_id), shell=True, stderr=stderr).decode()
@@ -138,7 +192,9 @@ async def manage_job(job, verbose=0):
                 if output_data and output_data_prev and output_data == output_data_prev:
                     if verbose:
                         print(f"Job frozen for {job.name}, stopping the job then restarting it")
-                    call(f"scancel {job_id}", shell=True)
+                    call(f"scancel {job_id}", shell=True, check=True)
+                    if limits_manager:
+                        await limits_manager.job_finished()
                     break
             else:
                 # job not on running state, so it is present in the queue but in a different state

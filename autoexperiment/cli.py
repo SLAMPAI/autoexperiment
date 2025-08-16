@@ -30,11 +30,17 @@ def build(config, *, fix:('f', multi()), verbose=1):
             cfg[key] = value       
     jobdefs = generate_job_defs(cfg, verbose=verbose)
     for jobdef in jobdefs:
+       _assert_job_name(jobdef.config, jobdef.name)
        os.makedirs(os.path.dirname(jobdef.sbatch_script), exist_ok=True)
        print(f"Building '{jobdef.sbatch_script}'...")
        with open(f"{jobdef.sbatch_script}", "w") as f:
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
+
+def _assert_job_name(config:str, name:str):
+    # check if there is a line containing `#SBATCH --job-name={name}`
+    if f"#SBATCH --job-name={name}" not in config:
+        raise ValueError(f"Please add #SBATCH --job-name={name} to your sbatch templates")
 
 def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:('f', multi())):
     """

@@ -7,7 +7,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --partition=booster
 #SBATCH --output={output_file}
-echo "Job Id:$SLURM_JOB_ID"
+#SBATCH --job-name={name}
 ml purge
 export TRANSFORMERS_CACHE=cache
 export TRANSFORMERS_OFFLINE=1

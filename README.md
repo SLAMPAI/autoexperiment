@@ -6,7 +6,7 @@ Launch and manage batch of SLURM experiments easily
 
 - `git clone https://github.com/SLAMPAI/autoexperiment`
 - `pip install -r requirements.txt`
-- `python setup.py develop`
+- `python -m pip install --editable .`
 
 # How to use ?
 
@@ -25,7 +25,7 @@ written as `{NAME}`.
 #SBATCH --time=01:00:00
 #SBATCH --partition=dc-gpu
 #SBATCH --output={output_file}
-echo "Job Id:$SLURM_JOB_ID"
+#SBATCH --job-name={name}
 ml purge
 export TRANSFORMERS_CACHE=cache
 export TRANSFORMERS_OFFLINE=1
@@ -77,27 +77,18 @@ srun --cpu_bind=none,v --accel-bind=gn python -u src/training/main.py \
 # where variables to be replaced are written as {NAME} (see Step 1)
 template: template.sbatch 
 
-# Path of the standard output file, it is important as it is used for checking:
-# 1 - if the job is frozen (if no change in during `check_interval_secs` secs)
-# 2 - the SLURM job id (`job_id_regexp`), this is important if, for some reason, 
-# the `autoexperiment run <CONFIG>` process is terminated and we want to resume it 
-# while we still have running jobs in SLURM. If it happens, just relaunch 
-# `autoexperiment run <CONFIG>` again, and it will find automatiaclly the SLURM job ids 
-# and continue as before, instead of launching new ones.
-# 3 - to find if the termination string (`termination_str`) appeared in the output file, 
-# this is used to stop from restarting the job forever, and consider it finished.
-# Remember that we have a max time limit in SLURM, 
+# Path of the standard output file, it is important as it is used for checking
+# if the job is frozen (if no change in during `check_interval_secs` secs)
+# and to find if the termination string (`termination_str`) appeared in the output file, 
+# this is used to stop from restarting the job forever (default behavior).
+# Remember that we have a max time limit in SLURM (e.g., usually 24h), 
 # so we restart the job as much as needed until we find the `termination_str`.
 output_file: "{logs}/{name}/slurm.out"
 
-# It is IMPORTANT that in the sbatch script (`template.sbatch`), we have a way to 
-# figure out SLURM job id (see explanation above), here we define the regexp used 
-# to find the SLURM job id.
-job_id_regexp: "Job Id:(\\d+)"
 # It is IMPORTANT to define the `termination_str`, it is a regexp used to detect
 # if a job is finished, otherwise, it will be restarted FOREVER.
 # Here, for instance, we detect a finishing job if it finishes the zero-shot 
-# evaluatioof the latest epoch.
+# evaluation the latest epoch.
 # ({epochs} will take the value of epochs, see section experiments below).
 termination_str: "Eval Epoch: {epochs}"
 
@@ -122,7 +113,24 @@ cmd: "sbatch {sbatch_script}"
 # Check the status jobs each number of secs, to restart them if needed
 check_interval_secs: 600
 
-# we first define few variables, which will be reused below
+# Each experiment will have a UNIQUE name, which we can define in any way
+# we want. 
+# it will be used in the template (`template.sbatch` here) but also to make 
+# the sbatch script name.
+# `name` is a crucial parameter. It is used to uniquely identifiy each job, and
+# to handle resuming autoexperiment in a new session. When autoexperiment process
+# fails for some reason, but the SLURM jobs are still running, if we relaunch
+# autoexperiment it will automatically recover the running jobs in the SLURM queue
+# by assigning the the job to the SLURM job with the same `name` value.
+# IMPORTANT: thus, `name` has to enforce two constraints:
+# - 1) it has to be unique
+# - 2) SLURM job name should be exactly as `name` of the job. So, it is NECESSARY in in the sbatch template to do `#SBATCH --job-name {name}` to have the correct resuming behavior
+name: "{dataset}_{model}_{epochs}"
+
+# Above were special variables.
+# Next, we define variables that can be used in the sbatch template.
+# These can be named anything, and can be nested.
+
 dataset:
   - datacomp:
       train_data: "/path/{0000000..0139827}.tar"
@@ -139,11 +147,7 @@ epochs: 1
 logs: "logs"
 nodes: 1
 train_num_samples: [12_800_000]
-# each experiment will have a name, which we can define in any way
-# we want. 
-# it will be used in the template (`template.sbatch` here) but also to make 
-# the sbatch script name.
-name: "{dataset}_{model}_{epochs}"
+
 ```
 
 ## Step 3 : run all the jobs together with autorestart ability

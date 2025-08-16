@@ -9,7 +9,7 @@ import asyncio
 
 cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
-cmd_check_job_id_by_name = "squeue --me -n {job_name} --format %i"
+cmd_check_job_id_by_name = "squeue --me -n '{job_name}' --format %i"
 
 
 class JobLimitsManager:

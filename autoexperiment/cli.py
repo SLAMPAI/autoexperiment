@@ -40,7 +40,7 @@ def build(config, *, fix:('f', multi()), verbose=1):
 def _assert_job_name(config:str, name:str):
     # check if there is a line containing `#SBATCH --job-name={name}`
     if f"#SBATCH --job-name={name}" not in config:
-        raise ValueError(f"Please add #SBATCH --job-name={name} to your sbatch templates")
+        raise ValueError("Please add #SBATCH --job-name={name} to your sbatch templates")
 
 def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:('f', multi())):
     """

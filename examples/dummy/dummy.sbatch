@@ -4,5 +4,6 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=00:01:00
 #SBATCH --partition=dc-cpu
+#SBATCH --output={output_file}
 #SBATCH --job-name={name}
 echo "FINISHED JOB"

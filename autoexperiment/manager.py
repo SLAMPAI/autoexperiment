@@ -147,26 +147,26 @@ async def manage_job(job, limits_manager=None, verbose=0):
             except Exception as ex:
                 # Exception after checking, which means that the job id no longer exists.
                 # In this case, we wait and relaunch, except if termination string is found
+                if limits_manager:
+                    await limits_manager.job_finished()
                 if verbose:
                     print(ex)
                 if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
-                    if limits_manager:
-                        await limits_manager.job_finished()
                     print(f"Job '{job.name}' is finished")
                     return
-                # Job will be relaunched - don't call job_finished() yet
+                # Job will be relaunched 
                 if verbose:
                     print(f"Retrying again in {check_interval_secs//60} mins for {job.name}...")
                 await asyncio.sleep(check_interval_secs)
                 break
             # if job is not present in the queue, relaunch it directly, except if termination string is found
             if str(job_id) not in data:
+                if limits_manager:
+                    await limits_manager.job_finished()
                 if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
-                    if limits_manager:
-                        await limits_manager.job_finished()
                     print(f"Job '{job.name}' is finished")
                     return
-                # Job will be relaunched - don't call job_finished() yet
+                # Job will be relaunched directly
                 break
             # Check first if job is specifically on a running state (to avoid the case where it is on pending state etc)
             data = check_output(cmd_check_job_running.format(job_id=job_id), shell=True, stderr=stderr).decode()

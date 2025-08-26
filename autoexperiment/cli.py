@@ -36,11 +36,49 @@ def build(config, *, fix:('f', multi()), verbose=1):
        with open(f"{jobdef.sbatch_script}", "w") as f:
           f.write(jobdef.config)
        os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
+       
+       # Save sbatch script to logs directory as well
+       _save_sbatch_to_logs(jobdef, verbose)
 
 def _assert_job_name(config:str, name:str):
     # check if there is a line containing `#SBATCH --job-name={name}`
     if f"#SBATCH --job-name={name}" not in config:
         raise ValueError("Please add #SBATCH --job-name={name} to your sbatch templates")
+
+def _save_sbatch_to_logs(jobdef, verbose=1):
+    """
+    Save the sbatch script to the logs directory alongside the original location.
+    """
+    # Extract logs directory from output_file path
+    logs_dir = os.path.dirname(jobdef.output_file)
+    
+    # Create a descriptive name for the sbatch file
+    # Try to extract mode from the jobdef.name or use a default
+    sbatch_filename = _get_sbatch_filename_for_logs(jobdef)
+    logs_sbatch_path = os.path.join(logs_dir, sbatch_filename)
+    
+    # Create logs directory if it doesn't exist
+    os.makedirs(logs_dir, exist_ok=True)
+    
+    # Copy the sbatch content to logs directory
+    if verbose >= 1:
+        print(f"Saving sbatch script to logs: '{logs_sbatch_path}'")
+    
+    with open(logs_sbatch_path, "w") as f:
+        f.write(jobdef.config)
+
+def _get_sbatch_filename_for_logs(jobdef):
+    """
+    Generate a descriptive filename for the sbatch script in logs directory.
+    """
+    # Try to extract mode from job name (e.g., "exp_TRAIN" -> "train.sbatch")
+    name_parts = jobdef.name.split('_')
+    if len(name_parts) > 1:
+        mode = name_parts[-1].lower()
+        return f"{mode}.sbatch"
+    
+    # Fallback: use the basename of the original sbatch_script
+    return os.path.basename(jobdef.sbatch_script)
 
 def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:('f', multi())):
     """

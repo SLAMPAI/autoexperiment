@@ -117,19 +117,21 @@ async def manage_job(job, limits_manager=None, verbose=0):
             
             # launch job
             try:
-                output = check_output(cmd, shell=True, stderr=stderr).decode()
                 if verbose:
-                    print(f"Launch a new job for {job.name}")
+                    print(f"Launching a new job for {job.name}")
+                output = check_output(cmd, shell=True, stderr=stderr).decode()
                 # get job id
                 job_id = get_job_id(output)
                 if job_id is not None and limits_manager:
                     await limits_manager.job_submitted()
-            except CalledProcessError:
+            except CalledProcessError as e:
+                if verbose:
+                    print(f"Error when launching a new job for {job.name}: {e}")
                 job_id = None
             
             if job_id is None:
                 if verbose:
-                    print(f"Cannot find job id in: {output} for {job.name}")
+                    print(f"Cannot find job id for {job.name}")
                     print(f"Retrying again in {check_interval_secs//60} mins...")
                 await asyncio.sleep(check_interval_secs)
                 continue

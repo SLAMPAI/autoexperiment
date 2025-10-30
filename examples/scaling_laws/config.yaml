@@ -1,0 +1,108 @@
+#
+# The following sections are mandatory: `autoexp`, `slurm`, `args`. The `experiment` section is optional.
+# Arguments from other sections can be referred everywhere.
+# If refferred in the same section, no prefix is needed,
+# if referred to in other sections, they need to be preceded by the section name (e.g. `args.lr`).
+#
+
+###############################################################
+# AUTOEXP.
+# Special variables used by autoexp.
+
+autoexp:
+    base_path: "/leonardo/home/userexternal/najroldi/oellm/dev"
+
+    exp_name: "{model_size}_lr{args.lr}_bsz{args.batch_size}_bias{bias_name}_nnodes{slurm.nnodes}"
+    name: "{exp_name}_{phase}_{cd_scale}_{mode}"
+
+    # Folder with sbatch templates
+    sbatch_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/target"
+    sbatch_out_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/target/generated"
+
+    # Templated sbatch.
+    template: "{sbatch_path}/{mode}.sbatch"
+
+    # Destination of genrated sbatch script.
+    sbatch_script: "{sbatch_out_path}/{name}.sbatch"
+
+    # Launch the generated sbatch script.
+    cmd: "sbatch {sbatch_script}"
+
+    termination_str: 1
+    termination_cmd: 1
+    start_condition_cmd: 1
+    check_interval_secs: 1
+
+###############################################################
+# TEMPLATE ARGS.
+# Placeholders in the templated sbatch. TODO: change name?
+
+slurm:
+    output_file: "examples/phases_dummy/{name}/slurm_{mode}.out"
+    name: "{autoexp.name}"
+
+###############################################################
+# MEGATRON ARGS.
+# These args are concatenated and passed verbatim to Megatron-LM.
+
+args:
+    data_path: 1
+    num_layers: 1
+    hidden_size: 1
+
+###############################################################
+# OPTIONAL EXPERIMENT SETUP.
+# This allows to easily distinguish between megatron args, slurm args, and intermediate variables.
+
+experiments:
+
+    args.lr: [1.e-2, 3.e-3]
+    args.batch_size: [4, 16]
+
+    model_size:
+        - 10M:
+            args.num_layers: 5
+            args.hidden_size: 256
+            slurm.nnodes: 1
+        - 30M:
+            args.num_layers: 10
+            args.hidden_size: 512
+            slurm.nnodes: 2
+
+    bias:
+        - with:
+            args.disable_bias_linear: ""
+            bias_name: "with"
+        - without:
+            args.disable_bias_linear: "--disable-bias-linear"
+            bias_name: "without"
+
+    # A folder where we collect helpers shell scripts.
+    scripts: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/scripts/megatron/scaling_laws"
+
+    phase:
+        - pretrain:
+            cd_scale: "None"
+            mode:
+                - train:
+                    autoexp.termination_cmd: "{scripts}/finished_{phase}_{mode}.sh {logs} {exp_name}"
+                - convert_eval:
+                    start_condition_cmd: "{scripts}/pending_convert_eval.sh {run_dir}"
+                    termination_cmd: "{scripts}/finished_{phase}_{mode}.sh {run_dir} {logs} {exp_name}"
+        - cooldown:
+            cd_scale:
+                - 10S:
+                    total_steps: 10
+                - 20S:
+                    total_steps: 20
+            cooldown_fraction: 0.1
+            args.lr_wsd_decay_iters: "expr({args.train_iters}*{cooldown_fraction})"
+            mode:
+                - train:
+                    start_condition_cmd: "{scripts}/pending_cooldown.sh {logs} {exp_name} {cd_scale}"
+                    termination_cmd: "{scripts}/finished_{phase}_{mode}.sh {logs} {exp_name} {cd_scale}"
+                - convert_eval:
+                    start_condition_cmd: "{scripts}/pending_convert_eval.sh {run_dir}"
+                    termination_cmd: "{scripts}/finished_{phase}_{mode}.sh {run_dir} {logs} {exp_name} {cd_scale}"
+
+

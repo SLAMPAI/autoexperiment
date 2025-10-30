@@ -1,7 +1,9 @@
+import re
 import warnings
 from omegaconf import OmegaConf, DictConfig, ListConfig
 from itertools import product
 from dataclasses import dataclass, fields
+from collections import defaultdict
 
 @dataclass
 class JobDef:
@@ -35,6 +37,11 @@ MANDATORY_FIELDS =[
    "cmd",
    "sbatch_script",
 ]
+PREFIXES = [
+  'autoexp',
+  'slurm',
+  'args',
+]
 
 
 def product_recursive(cfg):
@@ -46,18 +53,17 @@ def product_recursive(cfg):
    the keys are tuples constructed from the nested structure, the values are the corresponding values
 
    - a param is either a single key=value, a list of params, or a dict of params
-   - dict of params result in cartesian product of the values of the params, e.g.:
 
+   - dict of params result in cartesian product of the values of the params, e.g.:
       ```
       d:
          x:[1,2]
          y:[3,4]
       ```
-      this is a dict with keys x and y, values [1,2] and [3,4].
-      the dict will result in:
+      will result in:
       [{(d,x):1,(d,y):3}, {(d,x):1,(d,y):4}, {(d,x):2,(d,y):3}, {(d,x):3, (d,y):4}]
-   - list of params result in a union of the values, e.g.:
 
+   - list of params result in a union of the values, e.g.:
       ```
       - x: 
          val: [1,2]
@@ -72,7 +78,6 @@ def product_recursive(cfg):
 
 
       notice, if we remove the dash (-) like the following:
-
       ```
       x: 
          val: [1,2]
@@ -82,8 +87,7 @@ def product_recursive(cfg):
          r: 6
       ```
       we have a dict, so it is different semantics (that is, cartesian product), (2*2 = 4 values) it will result in:
-
-      [{(x,val:1), (x,r):5}, {(x,val):2, (x,r):5}] X [{(y,val):3, (y,r):6}, {(y,val):4, (y,r):6}]  = [
+      [
          {(x,val:1), (x,r):5, (y,val):3, (y,r):6},
          {(x,val:1), (x,r):5, (y,val):4, (y,r):6},
          {(x,val:2), (x,r):5, (y,val):3, (y,r):6},
@@ -146,22 +150,124 @@ def _merge(ds):
       d.update(di)
    return d
 
+def params_to_args(params: dict) -> list[str]:
+    """
+    Turn a dictionary of args into argument-style strings.
+
+    Rules:
+      - bool True  -> just the flag
+      - bool False -> skip
+      - list/tuple -> flag followed by all values
+      - scalar     -> flag + value
+    """
+    args = []
+    for key, value in params.items():
+        flag = f"--{key.replace('_','-')}"
+        if isinstance(value, bool):
+            if value:
+                args.append(flag)
+        elif isinstance(value, (list, tuple)):
+            args.append(flag)
+            args.extend(map(str, value))
+        else:
+            args.extend([flag, str(value)])
+    return args
+
+
+def substitute(s, params):
+   """
+      Replace placeholders like {args.lr} in string `s` using values from `params`.
+      Works with flat keys (e.g. 'args.lr').
+
+      Example:
+         s = "{model_size}_{slurm.nnodes}_{args.lr}"
+         params = {"model_size": '10M', "slurm.nnodes": 2, "args.lr": 1
+         -> 10M_2_1
+    """
+   for k, v in params.items():
+      s = re.sub(rf"{{\s*{re.escape(k)}\s*}}", str(v), s)
+   return s
+
+
+def resolve_templates_expr(params, verbose=0):
+   """
+   If value of a variable is a template format (e.g., '{dataset}_{lr}') or an expression e.g. 'expr({lr} * 0.001))', 
+   replace the values by the evaluated expression.
+   keep doing until no value needs to be evaluated.
+
+   Args:
+      params (dict): Dictionary of key–value pairs possibly containing template strings.
+      verbose (int, optional): Controls warning verbosity.
+   Returns:
+      dict: The updated `params` dictionary.
+   """
+   params = params.copy()
+   while True:
+      old_params = params.copy()
+      evaled_params = {k: v for k, v in old_params.items() if not _is_expr(v)}
+      for k in params.keys():
+         # if the value is not a string, we skip it
+         # as we only evaluate strings
+         if type(old_params[k]) != str:
+            continue
+         
+         try:
+            params[k] = substitute(old_params[k], evaled_params)
+         except Exception as ex:
+            # exception happens when some variables needed in the template do not exist (yet) in `evaled_params`, or expression is invalid.
+            # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
+            # but we make sure to throw a warning
+            if verbose > 0:
+               msg = (f"Cannot set value for {old_params[k]}' (Exception: {ex})")
+               if verbose == 2:
+                  msg += f" with params {evaled_params}"
+               warnings.warn(msg)
+         
+         # get the (possible) new value of the variable
+         v = params[k]
+         ## evaluate expressions
+         try:
+            if _is_expr(v):
+               params[k] = _eval_expr(v)
+         except Exception as ex:
+            # exception happens when some variables needed in the template do not exist (yet) in `evaled_params`, or expression is invalid.
+            # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
+            # but we make sure to throw a warning.
+            if verbose > 0:
+               warnings.warn(f"Cannot set value for '{k}' with expression '{v}' (Exception: {ex})")
+      if old_params == params:
+         break
+   
+   return params
+   
+
 def generate_job_defs(cfg, verbose=0):
    """
    Returns a list of JobDef from a config file (config.yaml)
    the JobDef list can directly be used by the manager to schedule/manage the jobs
    """
    jobs = []
-   for vals in product_recursive(cfg):
-      # params will store the key-value pairs
-      # of all the variables that can be used
-      # in the template
+   
+   # Resolve template placeholders in each section.
+   for prefix in PREFIXES:
+      cfg[prefix] = resolve_templates_expr(cfg[prefix], verbose)
+   
+   # Flatten the config, prepend ection names to keys.
+   clean_cfg = cfg.pop('experiments', {})
+   for prefix in PREFIXES:
+      for k, v in cfg.pop(prefix, {}).items():
+            clean_cfg[f'{prefix}.{k}'] = v
+   if not cfg.is_empty:
+      raise ValueError('Invalid configuration provided.')
+   
+   # For each combination of configs, we create a separate job.
+   for vals in product_recursive(clean_cfg):
+      # params will store the key-value pairs of all the variables that can be used in the template
       params = {}
       for ks, v in vals.items():
          # each variable is a tuple of keys and the value
          # we can have multiple keys because we can have deep branches of possibitilies
-         # so as many keys as we go deep
-         # (k1, k2, ..., v)
+         # so as many keys as we go deep (k1, k2, ..., v)
 
          # we just set in params the value of the key as the value of the next key
          # i.e. k1 -> k2, k2 -> k3, etc
@@ -169,63 +275,53 @@ def generate_job_defs(cfg, verbose=0):
             params[ki] = kin
          # last key goes to the actual value
          params[ks[-1]] = v
-      # if value of a variable is a template format (e.g., '{dataset}_{lr}') or an expression e.g. 'expr({lr} * 0.001))', 
-      # replace the values by the evaluated expression.
-      # keep doing until no value needs to be evaluated.
-      while True:
-         old_params = params.copy()
-         evaled_params = {k: v for k, v in old_params.items() if not _is_expr(v)}
-         for k in params.keys():
-            
-            # if the value is not a string, we skip it
-            # as we only evaluate strings
-            if type(old_params[k]) != str:
-               continue
-            
-            try:
-               params[k] = old_params[k].format(**evaled_params)
-            except Exception as ex:
-               # exception happens when some variables needed in the template do not exist (yet) in `evaled_params`, or expression is invalid.
-               # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
-               # but we make sure to throw a warning
-               if verbose > 0:
-                  msg = (f"Cannot set value for {old_params[k]}' (Exception: {ex})")
-                  if verbose == 2:
-                     msg += f" with params {evaled_params}"
-                  warnings.warn(msg)
-            
-            # get the (possible) new value of the variable
-            v = params[k]
-            ## evaluate expressions
-            try:
-               if _is_expr(v):
-                  params[k] = _eval_expr(v)
-            except Exception as ex:
-               # exception happens when some variables needed in the template do not exist (yet) in `evaled_params`, or expression is invalid.
-               # Here, we skip the exceptions, as some variables can be later evaled in next iterations,
-               # but we make sure to throw a warning.
-               if verbose > 0:
-                  warnings.warn(f"Cannot set value for '{k}' with expression '{v}' (Exception: {ex})")
-         if old_params == params:
-            break
+
+      params = resolve_templates_expr(params)
+      
       # at this point, we can use the template file to generate the config file
       # by replacing all the keys from 'params' with their values in the template
       # file.
-      tpl = open(params['template']).read()
-      config = tpl.format(**params)
+   
+      # Groups params by their prefix into nested dictionaries.
+      grouped_params = defaultdict(dict)
+      for k, v in params.items():
+          if "." in k:
+              prefix, subkey = k.split(".", 1)
+              if prefix not in PREFIXES:
+                  raise ValueError(f'Found argument with invalid prefix: {prefix}.')
+              grouped_params[prefix][subkey] = v
+
+      # Templated sbatch.
+      tpl = open(grouped_params['autoexp']['template']).read()
+
+      # Escape ARGS so format() ignores it
+      tpl = tpl.replace("{ARGS}", "__ARGS__")
+      
+      # Replace placeholders of form {xxx} with params
+      placeholders = {m[1] for m in re.finditer(r"\{(\w+)\}", tpl)}
+      tpl_rendered = tpl.format(**{k: v for k, v in grouped_params['slurm'].items() if k in placeholders})        
+
+      # Build ARGS, inject into template.
+      megatron_args = params_to_args(grouped_params['args'])
+      tpl_rendered = tpl_rendered.replace("__ARGS__", " ".join(megatron_args))
+
       # auto generate the name of the job from the full set of params
       # if 'name' is not present in 'params', otherwise just use the value of 'name'
       # from params.
-      name = params.get('name', _auto_name(params))
+      name = grouped_params['slurm'].get('name', _auto_name(grouped_params['slurm']))
       # Define the 'JobDef' structure, which is directly used by the manager
       # to schedule/manaage the jobs
-      jobdef = JobDef(config=config, name=name, params=params)
-      # These are directly used by the manager (e.g. check_interval_secs, name, etc)
+      jobdef = JobDef(config=tpl_rendered, name=name, params=grouped_params)
+      
+      # Populate jobdef dataclass from params, enforcing required fields.
       for field in fields(jobdef):
-         if field.name in params:
-            setattr(jobdef, field.name, params[field.name])
-         elif field.name in MANDATORY_FIELDS:
-            raise ValueError(f"Field '{field.name}' is a not provided, but is MANDATORY")
+         for params in grouped_params.values():
+            if field.name in params:
+               setattr(jobdef, field.name, params[field.name])
+               break
+         else:
+            if field.name in MANDATORY_FIELDS:
+               raise ValueError(f"Field '{field.name}' is a not provided, but is MANDATORY")
       jobs.append(jobdef)
    _check_name_uniqueness(jobs)
    return jobs

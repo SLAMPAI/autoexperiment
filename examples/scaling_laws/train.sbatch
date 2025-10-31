@@ -18,5 +18,7 @@
 # Test script for AutoExp with Full YAML integration.
 
 echo "Dummy job, with name: {name}"
-echo "Dummy job, with args: {ARGS}"
+echo "Dummy job, with args: {MEGATRON_ARGS}"
 
+NOPE=1
+echo "${NOPE}"

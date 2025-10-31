@@ -1,9 +1,12 @@
 import re
 import warnings
-from omegaconf import OmegaConf, DictConfig, ListConfig
+from omegaconf import DictConfig, ListConfig
 from itertools import product
 from dataclasses import dataclass, fields
 from collections import defaultdict
+import warnings
+warnings.warn("this should print", UserWarning)
+
 
 @dataclass
 class JobDef:
@@ -239,7 +242,29 @@ def resolve_templates_expr(params, verbose=0):
          break
    
    return params
-   
+
+
+def check_unresolved_placeholders(params):
+    """
+    Check for unresolved placeholders like {var} in parameter values.
+    """
+    unresolved = {
+        k: v for k, v in params.items()
+        if isinstance(v, str) and re.search(r"{[^{}]+}", v)
+    }
+
+    if unresolved:
+      raise ValueError(f"Unresolved placeholders: {unresolved}")
+
+
+def render_tpl(tpl, params):
+   """Replace {var} placeholders without touching ${var}."""
+   placeholders = {m[1] for m in re.finditer(r"\{(\w+)\}", tpl)}
+   for k, v in params.items():
+      if k in placeholders:
+         tpl = tpl.replace(f"{{{k}}}", str(v))
+   return tpl
+ 
 
 def generate_job_defs(cfg, verbose=0):
    """
@@ -251,6 +276,9 @@ def generate_job_defs(cfg, verbose=0):
    # Resolve template placeholders in each section.
    for prefix in PREFIXES:
       cfg[prefix] = resolve_templates_expr(cfg[prefix], verbose)
+   
+   import pdb
+   pdb.set_trace()
    
    # Flatten the config, prepend ection names to keys.
    clean_cfg = cfg.pop('experiments', {})
@@ -276,7 +304,8 @@ def generate_job_defs(cfg, verbose=0):
          # last key goes to the actual value
          params[ks[-1]] = v
 
-      params = resolve_templates_expr(params)
+      params = resolve_templates_expr(params, verbose)
+      check_unresolved_placeholders(params)
       
       # at this point, we can use the template file to generate the config file
       # by replacing all the keys from 'params' with their values in the template
@@ -294,24 +323,21 @@ def generate_job_defs(cfg, verbose=0):
       # Templated sbatch.
       tpl = open(grouped_params['autoexp']['template']).read()
 
-      # Escape ARGS so format() ignores it
-      tpl = tpl.replace("{ARGS}", "__ARGS__")
-      
       # Replace placeholders of form {xxx} with params
-      placeholders = {m[1] for m in re.finditer(r"\{(\w+)\}", tpl)}
-      tpl_rendered = tpl.format(**{k: v for k, v in grouped_params['slurm'].items() if k in placeholders})        
-
-      # Build ARGS, inject into template.
+      tpl = render_tpl(tpl, grouped_params['slurm'])
+      
+      # Build megatron args, render them in the template
       megatron_args = params_to_args(grouped_params['args'])
-      tpl_rendered = tpl_rendered.replace("__ARGS__", " ".join(megatron_args))
-
+      megatron_args = " ".join(megatron_args)
+      tpl = tpl.replace("{megatron_args}", megatron_args)
+      
       # auto generate the name of the job from the full set of params
       # if 'name' is not present in 'params', otherwise just use the value of 'name'
-      # from params.
+      # from params. TODO (nico): change!
       name = grouped_params['slurm'].get('name', _auto_name(grouped_params['slurm']))
       # Define the 'JobDef' structure, which is directly used by the manager
       # to schedule/manaage the jobs
-      jobdef = JobDef(config=tpl_rendered, name=name, params=grouped_params)
+      jobdef = JobDef(config=tpl, name=name, params=grouped_params)
       
       # Populate jobdef dataclass from params, enforcing required fields.
       for field in fields(jobdef):
@@ -322,6 +348,10 @@ def generate_job_defs(cfg, verbose=0):
          else:
             if field.name in MANDATORY_FIELDS:
                raise ValueError(f"Field '{field.name}' is a not provided, but is MANDATORY")
+            
+      import pdb
+      pdb.set_trace()
+      
       jobs.append(jobdef)
    _check_name_uniqueness(jobs)
    return jobs

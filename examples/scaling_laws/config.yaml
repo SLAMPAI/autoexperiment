@@ -1,9 +1,7 @@
 #
-# The following sections are mandatory: `autoexp`, `slurm`, `args`. 
-# The `experiment` section is optional.
-# Arguments from other sections can be referred everywhere.
-# If refferred in the same section, no prefix is needed,
-# if referred to in other sections, they need to be preceded by the section name (e.g. `args.lr`).
+# This is a small test for scaling laws.
+# Need to test the following:
+# [] Scheduling 
 #
 
 ###############################################################
@@ -11,14 +9,16 @@
 # Special variables used by autoexp.
 
 autoexp:
-    base_path: "/leonardo/home/userexternal/najroldi/oellm/dev"
 
     exp_name: "{model_size}_lr{args.lr}_bsz{args.batch_size}_bias{bias_name}_nnodes{slurm.nnodes}"
     name: "{exp_name}_{phase}_{cd_scale}_{mode}"
 
+    # Checkpoint directory
+    run_dir: "TODO"
+
     # Folder with sbatch templates
-    sbatch_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/target"
-    sbatch_out_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/target/generated"
+    sbatch_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/scaling_laws/"
+    sbatch_out_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/scaling_laws/generated"
 
     # Templated sbatch.
     template: "{sbatch_path}/{mode}.sbatch"
@@ -28,11 +28,6 @@ autoexp:
 
     # Launch the generated sbatch script.
     cmd: "sbatch {sbatch_script}"
-
-    termination_str: 1
-    termination_cmd: 1
-    start_condition_cmd: 1
-    check_interval_secs: 1
 
 ###############################################################
 # TEMPLATE ARGS.
@@ -50,6 +45,7 @@ args:
     data_path: 1
     num_layers: 1
     hidden_size: 1
+    train_iters: 1
 
 ###############################################################
 # OPTIONAL EXPERIMENT SETUP.
@@ -57,7 +53,7 @@ args:
 
 experiments:
 
-    args.lr: [1.e-2, 3.e-3]
+    args.lr: [1.e-2]
     args.batch_size: [4, 16]
 
     model_size:

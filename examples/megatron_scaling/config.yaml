@@ -1,0 +1,174 @@
+#
+# This is a small test for scaling laws.
+# Need to test the following:
+# [] Scheduling 
+#
+
+###############################################################
+# AUTOEXP.
+# Special variables used by autoexp.
+
+autoexp:
+
+    name: "test2_lr{args.lr}"
+
+    # Folder with sbatch templates.
+    sbatch_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/test"
+    sbatch_out_path: "{sbatch_path}/generated"
+
+    # Templated sbatch.
+    template: "{sbatch_path}/train.sbatch"
+
+    # Destination of genrated sbatch script.
+    sbatch_script: "{sbatch_out_path}/train_{name}.sbatch"
+
+    # Launch the generated sbatch script.
+    cmd: "sbatch {sbatch_script}"
+
+    # A folder where we collect helpers shell scripts.
+    scripts: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/scripts/megatron/scaling_laws"
+
+    # Termination cmd
+    termination_cmd: "{scripts}/finished_train.sh {slurm.output_file}"
+
+###############################################################
+# TEMPLATE ARGS.
+# Placeholders in the templated sbatch. TODO: change name?
+
+slurm:
+    job_name: "{autoexp.name}"
+    out_dir: "{autoexp.sbatch_path}/logs"
+    output_file: "{out_dir}/job_name.out"
+    err_file: "{out_dir}/job_name.err"
+
+    account: "AIFAC_L01_028"
+    partition: boost_usr_prod
+    qos: "boost_qos_dbg"
+
+    cluster_setup_script: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/test/setup_leonardo.sh"
+
+###############################################################
+# MEGATRON ARGS.
+# These args are concatenated and passed verbatim to Megatron-LM.
+
+args:
+
+    # WANDB NAME, also used as JOB_NAME
+    wandb_exp_name: oellm_test
+    wandb_project: oellm-train
+
+    ## Specify one of these only!
+    train_iters: 100
+    # train_samples: null
+    # train_tokens: 300_000_000_00
+
+    ## Specify one of these only!
+    lr_warmup_iters: 1
+    # lr_warmup_samples: null
+    # lr_warmup_fraction: 0.1
+
+    ## Specify one of these only!
+    lr_decay_iters: 20
+    lr_wsd_decay_iters: 20
+    # lr_decay_samples: null
+    # lr_decay_fraction: 0.2
+
+    # DATA
+    data_path: [
+      /leonardo_work/AIFAC_L01_028/najroldi/datasets/Nemotron-cc-2024-HQ-real-synth-mix/GPT-NeoX/merged_0,
+      /leonardo_work/AIFAC_L01_028/najroldi/datasets/Nemotron-cc-2024-HQ-real-synth-mix/GPT-NeoX/merged_1,
+      /leonardo_work/AIFAC_L01_028/najroldi/datasets/Nemotron-cc-2024-HQ-real-synth-mix/GPT-NeoX/merged_2,
+      /leonardo_work/AIFAC_L01_028/najroldi/datasets/Nemotron-cc-2024-HQ-real-synth-mix/GPT-NeoX/merged_3,
+      /leonardo_work/AIFAC_L01_028/najroldi/datasets/Nemotron-cc-2024-HQ-real-synth-mix/GPT-NeoX/merged_4,
+      /leonardo_work/AIFAC_L01_028/najroldi/datasets/Nemotron-cc-2024-HQ-real-synth-mix/GPT-NeoX/merged_5  
+    ]
+    seq_length: 2048
+    max_position_embeddings: 2048
+    micro_batch_size: 25
+    global_batch_size: 1000
+    vocab_file: "/leonardo_work/AIFAC_L01_028/najroldi/models/EleutherAI/gpt-neox-20b/vocab.json"
+    merge_file: "/leonardo_work/AIFAC_L01_028/najroldi/models/EleutherAI/gpt-neox-20b/merges.txt"
+    num_workers: 8
+    split: '99,1,0'
+
+    # MODEL: 10M
+    num_layers: 5
+    hidden_size: 160
+    ffn_hidden_size: 640
+    num_attention_heads: 4
+    init_method_std: 0.02
+    position_embedding_type: "rope"
+    rotary_base: 10000
+    rotary_percent: 1.0
+    group_query_attentions: False
+    num_query_groups: 8 # no gqa when NUM_QUERY_GROUPS==NUM_ATTENTION_HEADS TODO: check
+    attention_dropout: 0.0
+    hidden_dropout: 0.0
+    normalization: RMSNorm
+    norm_epsilon: 1.e-5 # rmsnorm epsilon
+    qk_layernorm: False # potentially enable qk-norm
+    bf16: True
+    swiglu: True
+    untie_embeddings_and_output_weights: False
+    use_flash_attn: True
+    attention_softmax_in_fp32: False
+    disable_bias_linear: True
+
+    # these args substantially improve TFLOP/s/GPU (1.7B model on 54 nodes, 160 vs 140 with vs without)
+    overlap_param_gather: True
+    overlap_grad_reduce: True
+    overlap_param_gather_with_optimizer_step: False # with interleaved pipeline parallelism
+
+    # TRAINING, PARALLELISM
+    recompute_activations: False
+    use_torch_fsdp2: False # it's either this or the next 4 args
+    tensor_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    context_parallel_size: 1
+    sequence_parallel: True
+
+    # num_layers_per_virtual_pipeline_stage: null # interleaved pipeline scheduling is only possible with pipeline parallel degree > 1.
+    use_distributed_optimizer: True
+
+    distributed_backend: nccl
+    distributed_timeout_minutes: 10
+
+    # OPTIMIZER
+    optimizer: adam
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_eps: 1.e-8
+    min_lr: 0.0
+    lr_decay_style: WSD
+    lr_wsd_decay_style: linear
+    clip_grad: 1.0
+    weight_decay: 0.05
+
+    # PROFILE
+    profile: False
+    use_pytorch_profiler: False
+    profile_ranks: [0]
+    profile_step_start: 5
+    profile_step_end: 12
+
+    # EVALS
+    eval_interval: 72661
+    eval_iters: 1
+
+    # LOGGING
+    log_interval: 1
+    log_progress: True
+    log_throughput: True
+    tensorboard_queue_size: 5
+
+    # Set CHECKPOINT_FORMAT
+    ckpt_format: "torch" # "torch_dist" is currently bugged
+    save_interval: 2000
+
+
+###############################################################
+# OPTIONAL EXPERIMENT SETUP.
+# This allows to easily distinguish between megatron args, slurm args, and intermediate variables.
+
+experiments:
+    args.lr: [1.e-2, 1.e-1]

@@ -63,7 +63,7 @@ chmod +x $SETUP_SCRIPT
 source $SETUP_SCRIPT
 
 # OUTPUT_DIR
-CHECKPOINT_PATH="{out_dir}/checkpoints/$logid"
+CHECKPOINT_PATH="{out_dir}/checkpoints/$SLURM_JOB_NAME"
 TENSORBOARD_DIR="${CHECKPOINT_PATH}/tensorboard"
 WANDB_DIR="${CHECKPOINT_PATH}/wandb"
 mkdir -p "{out_dir}" "$CHECKPOINT_PATH" "$TENSORBOARD_DIR" "$WANDB_DIR"

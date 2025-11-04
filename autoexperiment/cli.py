@@ -35,7 +35,7 @@ def build(config, *, fix:('f', multi()), verbose=1):
        print(f"Building '{jobdef.sbatch_script}'...")
        with open(f"{jobdef.sbatch_script}", "w") as f:
           f.write(jobdef.config)
-       os.makedirs(os.path.dirname(jobdef.output_file), exist_ok=True)
+       os.makedirs(jobdef.out_dir, exist_ok=True)
 
 def _assert_job_name(config:str, name:str):
     # check if there is a line containing `#SBATCH --job-name={name}`

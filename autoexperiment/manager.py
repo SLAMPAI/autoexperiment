@@ -42,6 +42,16 @@ class JobLimitsManager:
                 self.jobs_submitted -= 1
             self.condition.notify_all()  # Wake waiting jobs
 
+
+def get_latest_log(out_dir, job_name, job_id):
+    files = [
+        os.path.join(out_dir, f)
+        for f in os.listdir(out_dir)
+        if re.match(fr"{job_name}-{job_id}-\d+_\d+\.out", f)
+    ]
+    return max(files, key=os.path.getmtime) if files else None
+
+
 def manage_jobs_forever(jobs, max_jobs:int=None, verbose=0):
     """
     Manage a list of jobs forever, relaunching them if they are frozen or not running anymore.
@@ -58,7 +68,7 @@ async def manage_job(job, limits_manager=None, verbose=0):
     Manage a single job, relaunching it if it is frozen or not running anymore.
     """
     cmd = job.cmd
-    output_file = job.output_file
+    out_dir = job.out_dir
     check_interval_secs = job.check_interval_secs
     start_condition_cmd = job.start_condition_cmd
     termination_str = job.termination_str
@@ -81,7 +91,7 @@ async def manage_job(job, limits_manager=None, verbose=0):
         return
 
     while True:
-        if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
+        if check_if_done(out_dir, job.name, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
             if limits_manager:
                 await limits_manager.job_finished()
             print(f"Job '{job.name}' is finished")
@@ -153,7 +163,7 @@ async def manage_job(job, limits_manager=None, verbose=0):
                     await limits_manager.job_finished()
                 if verbose:
                     print(ex)
-                if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
+                if check_if_done(out_dir, job.name, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
                     print(f"Job '{job.name}' is finished")
                     return
                 # Job will be relaunched 
@@ -165,7 +175,7 @@ async def manage_job(job, limits_manager=None, verbose=0):
             if str(job_id) not in data:
                 if limits_manager:
                     await limits_manager.job_finished()
-                if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
+                if check_if_done(out_dir, job.name, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
                     print(f"Job '{job.name}' is finished")
                     return
                 # Job will be relaunched directly
@@ -175,7 +185,7 @@ async def manage_job(job, limits_manager=None, verbose=0):
             if str(job_id) in data:
                 # job on running state
                 print(f"Job '{job.name}' is running...(ID:{job_id})")
-                if not os.path.exists(output_file):
+                if not os.path.exists(out_dir):
                     if verbose:
                         print(f"Output file not found for {job.name}, waiting...")
                     await asyncio.sleep(check_interval_secs)
@@ -183,11 +193,11 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 if verbose:
                     print(f"Check if the job is freezing for {job.name}...")
                 # if job is on running state, check the output file
-                output_data_prev = get_file_content(output_file)
+                output_data_prev = get_file_content(out_dir, job.name)
                 # wait few minutes
                 await asyncio.sleep(check_interval_secs)
                 # check again the output file
-                output_data = get_file_content(output_file)
+                output_data = get_file_content(out_dir, job.name)
                 # if the file did not change, then it is considered
                 # to be frozen
                 # (make sure there are is output before checking)
@@ -204,14 +214,41 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 await asyncio.sleep(check_interval_secs)
  
 
-def check_if_done(logfile, termination_str='', termination_cmd='', verbose=0):
-    return (
-        (os.path.exists(logfile) and (termination_str != "") and re.search(termination_str, open(logfile).read())) or 
-        (termination_cmd and int(check_output(termination_cmd, shell=True, stderr=sys.stderr if verbose >=2 else DEVNULL)) == 1)
+def find_latest_log(log_dir, job_name, ext='out'):
+    """Return latest <job_name>-<jobid>-<timestamp>.out inside log_dir."""
+    pattern = re.compile(rf'{re.escape(job_name)}-(\d+)-([\d_-]+)\.{ext}')
+    candidates = []
+    for f in os.listdir(log_dir):
+        m = pattern.fullmatch(f)
+        if m:
+            timestamp = m.group(2)
+            candidates.append((timestamp, os.path.join(log_dir, f)))
+    # Pick the file with the largest timestamp (lexicographically sorted)
+    return max(candidates, key=lambda x: x[0])[1] if candidates else None
+
+
+def check_if_done(out_dir, job_name, termination_str='', termination_cmd='', verbose=0):
+    logfile = find_latest_log(out_dir, job_name, 'out')
+    if not logfile or not os.path.exists(logfile):
+        return False
+    with open(logfile, errors='ignore') as f:
+        logs = f.read()
+
+    return bool(
+        (termination_str and re.search(termination_str, logs)) 
+        or
+        (termination_cmd and int(check_output(termination_cmd, shell=True, stderr=sys.stderr if verbose >= 2 else DEVNULL)) == 1)
     )
 
-def get_file_content(output_file):
-    return open(output_file, errors='ignore').read()
+
+def get_file_content(out_dir, job_name):
+    """Read the content of the latest <job_name>-<jobid>-<timestamp>.out file."""
+    logfile = find_latest_log(out_dir, job_name, 'out')
+    if not logfile or not os.path.exists(logfile):
+        return ""
+    with open(logfile, errors='ignore') as f:
+        return f.read()
+
 
 def get_job_id(s):
     try:

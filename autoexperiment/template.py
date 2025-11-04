@@ -17,8 +17,8 @@ class JobDef:
    config: str = ""
    # name of the job, have to be UNIQUE, used to identify a job, and have to be assigned to SLURM jobname in the SBATCH script.
    name: str = ""
-   # output file path of the job: used to check if job is hanging or not. If no output for log interval, job is restarted. 
-   output_file: str = "slurm.out"
+   # output directory of the job: used by the manager together with `name`
+   out_dir: str = ""
    # command to run for the job
    cmd: str = "sbatch run.sbatch"
    # path to sbatch script
@@ -35,7 +35,7 @@ class JobDef:
 MANDATORY_FIELDS =[
    "name",
    "template",
-   "output_file",
+   "out_dir",
    "cmd",
    "sbatch_script",
 ]

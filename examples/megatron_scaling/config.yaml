@@ -1,7 +1,5 @@
 #
 # This is a small test for scaling laws.
-# Need to test the following:
-# [] Scheduling 
 #
 
 ###############################################################
@@ -10,26 +8,30 @@
 
 autoexp:
 
-    name: "test2_lr{args.lr}"
+    # A name common to all the modes and phases, and a unique name
+    base_name: "test3_lr{args.lr}"
 
     # Folder with sbatch templates.
-    sbatch_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/test"
+    sbatch_path: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/megatron_scaling"
     sbatch_out_path: "{sbatch_path}/generated"
 
     # Templated sbatch.
     template: "{sbatch_path}/train.sbatch"
 
     # Destination of genrated sbatch script.
-    sbatch_script: "{sbatch_out_path}/train_{name}.sbatch"
+    sbatch_script: "{sbatch_out_path}/train_{autoexp.name}.sbatch"
 
     # Launch the generated sbatch script.
     cmd: "sbatch {sbatch_script}"
 
     # A folder where we collect helpers shell scripts.
-    scripts: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/scripts/megatron/scaling_laws"
+    scripts: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/megatron_scaling/scripts"
 
     # Termination cmd
-    termination_cmd: "{scripts}/finished_train.sh {slurm.output_file}"
+    termination_cmd: "{scripts}/finished_train.py {slurm.out_dir} {slurm.job_name}"
+
+    # Checkpoint path
+    ckpt_path: "{slurm.out_dir}/checkpoints"
 
 ###############################################################
 # TEMPLATE ARGS.
@@ -38,14 +40,12 @@ autoexp:
 slurm:
     job_name: "{autoexp.name}"
     out_dir: "{autoexp.sbatch_path}/logs"
-    output_file: "{out_dir}/job_name.out"
-    err_file: "{out_dir}/job_name.err"
 
     account: "AIFAC_L01_028"
     partition: boost_usr_prod
     qos: "boost_qos_dbg"
 
-    cluster_setup_script: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/test/setup_leonardo.sh"
+    cluster_setup_script: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/megatron_scaling/setup_leonardo.sh"
 
 ###############################################################
 # MEGATRON ARGS.
@@ -58,7 +58,6 @@ args:
     wandb_project: oellm-train
 
     ## Specify one of these only!
-    train_iters: 100
     # train_samples: null
     # train_tokens: 300_000_000_00
 
@@ -163,7 +162,7 @@ args:
 
     # Set CHECKPOINT_FORMAT
     ckpt_format: "torch" # "torch_dist" is currently bugged
-    save_interval: 2000
+    save_interval: 10
 
 
 ###############################################################
@@ -172,3 +171,23 @@ args:
 
 experiments:
     args.lr: [1.e-2, 1.e-1]
+
+    phase:
+        - pretrain:
+            autoexp.name: "{autoexp.base_name}_stable"
+            args.train_iters: 50
+
+        - cooldown:
+            autoexp.name: "{autoexp.base_name}_decay{cd_scale}"
+            cd_scale:
+                - 100iters:
+                    args.train_iters: 80
+                - 80iters:
+                    args.train_iters: 60
+            start_iter: 20
+            cooldown_fraction: 0.1
+            autoexp.start_condition_cmd: >
+                "{autoexp.scripts}/pending_cooldown.sh 
+                {autoexp.ckpt_path} {autoexp.base_name}_stable 
+                {autoexp.name} 
+                {start_iter}"

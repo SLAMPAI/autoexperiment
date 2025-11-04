@@ -5,7 +5,6 @@ from itertools import product
 from dataclasses import dataclass, fields
 from collections import defaultdict
 import warnings
-warnings.warn("this should print", UserWarning)
 
 
 @dataclass
@@ -169,7 +168,7 @@ def params_to_args(params: dict) -> list[str]:
         if isinstance(value, bool):
             if value:
                 args.append(flag)
-        elif isinstance(value, (list, tuple)):
+        elif isinstance(value, (list, tuple, ListConfig)):
             args.append(flag)
             args.extend(map(str, value))
         else:
@@ -254,7 +253,7 @@ def check_unresolved_placeholders(params):
     }
 
     if unresolved:
-      raise ValueError(f"Unresolved placeholders: {unresolved}")
+      raise ValueError(f"Cannot resolve YAML at placeholders: {unresolved}")
 
 
 def render_tpl(tpl, params):
@@ -277,19 +276,21 @@ def generate_job_defs(cfg, verbose=0):
    for prefix in PREFIXES:
       cfg[prefix] = resolve_templates_expr(cfg[prefix], verbose)
    
-   import pdb
-   pdb.set_trace()
+   # We split the config in two parts:
+   # - experiments part, to be resolved into multiple experiments
+   # - autoexp and template part, which does not need expansion
+   exp_cfg = cfg.pop('experiments', {})
    
-   # Flatten the config, prepend ection names to keys.
-   clean_cfg = cfg.pop('experiments', {})
+   # Flatten one part of the config, prepend section names to keys.
+   flat_cfg = {}
    for prefix in PREFIXES:
       for k, v in cfg.pop(prefix, {}).items():
-            clean_cfg[f'{prefix}.{k}'] = v
+            flat_cfg[f'{prefix}.{k}'] = v
    if not cfg.is_empty:
       raise ValueError('Invalid configuration provided.')
-   
-   # For each combination of configs, we create a separate job.
-   for vals in product_recursive(clean_cfg):
+
+   # For each combination of experiments config, we create a separate job.
+   for vals in product_recursive(exp_cfg):
       # params will store the key-value pairs of all the variables that can be used in the template
       params = {}
       for ks, v in vals.items():
@@ -303,7 +304,11 @@ def generate_job_defs(cfg, verbose=0):
             params[ki] = kin
          # last key goes to the actual value
          params[ks[-1]] = v
+      
+      # Add config from other sections. Params has higher priority.
+      params = flat_cfg | params
 
+      # Resolve template and expressions in the config.
       params = resolve_templates_expr(params, verbose)
       check_unresolved_placeholders(params)
       
@@ -320,21 +325,18 @@ def generate_job_defs(cfg, verbose=0):
                   raise ValueError(f'Found argument with invalid prefix: {prefix}.')
               grouped_params[prefix][subkey] = v
 
-      # Templated sbatch.
+      # Render templated sbatch script.
       tpl = open(grouped_params['autoexp']['template']).read()
-
-      # Replace placeholders of form {xxx} with params
       tpl = render_tpl(tpl, grouped_params['slurm'])
-      
-      # Build megatron args, render them in the template
       megatron_args = params_to_args(grouped_params['args'])
-      megatron_args = " ".join(megatron_args)
-      tpl = tpl.replace("{megatron_args}", megatron_args)
-      
+      # megatron_args = " \\\n    ".join(params_to_args(grouped_params['args']))
+      megatron_args = " ".join(params_to_args(grouped_params['args']))
+      tpl = tpl.replace("{megatron_args}", f'"{megatron_args}"')
+
       # auto generate the name of the job from the full set of params
       # if 'name' is not present in 'params', otherwise just use the value of 'name'
       # from params. TODO (nico): change!
-      name = grouped_params['slurm'].get('name', _auto_name(grouped_params['slurm']))
+      name = grouped_params['autoexp'].get('name', _auto_name(grouped_params['slurm']))
       # Define the 'JobDef' structure, which is directly used by the manager
       # to schedule/manaage the jobs
       jobdef = JobDef(config=tpl, name=name, params=grouped_params)
@@ -348,9 +350,6 @@ def generate_job_defs(cfg, verbose=0):
          else:
             if field.name in MANDATORY_FIELDS:
                raise ValueError(f"Field '{field.name}' is a not provided, but is MANDATORY")
-            
-      import pdb
-      pdb.set_trace()
       
       jobs.append(jobdef)
    _check_name_uniqueness(jobs)

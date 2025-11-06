@@ -11,6 +11,11 @@ cmd_check_job_in_queue = "squeue -j {job_id}"
 cmd_check_job_running = "squeue -j {job_id} -t R"
 cmd_check_job_id_by_name = "squeue --me -n '{job_name}' --format %i"
 
+R  = "\033[0m" # reset
+G  = "\033[32m" # green
+Y = "\033[33m" # yellow
+P = "\033[35m" # purple
+
 
 class JobLimitsManager:
     def __init__(self, max_jobs=None):
@@ -41,15 +46,6 @@ class JobLimitsManager:
             if self.jobs_submitted > 0:
                 self.jobs_submitted -= 1
             self.condition.notify_all()  # Wake waiting jobs
-
-
-def get_latest_log(out_dir, job_name, job_id):
-    files = [
-        os.path.join(out_dir, f)
-        for f in os.listdir(out_dir)
-        if re.match(fr"{job_name}-{job_id}-\d+_\d+\.out", f)
-    ]
-    return max(files, key=os.path.getmtime) if files else None
 
 
 def manage_jobs_forever(jobs, max_jobs:int=None, verbose=0):
@@ -87,31 +83,31 @@ async def manage_job(job, limits_manager=None, verbose=0):
     else: 
         # more than one job found with same name
         # TODO can fail if different autoexp sessions use same names, one must ensure that it is not the case!
-        print(f"Found duplicate jobs with same name: '{job.name}': {job_ids}. Please fix your YAML config to have only unique names.")
+        print(f"Found duplicate jobs with same name: {G}'{job.name}'{R}: {Y}{job_ids}{R}. Please fix your YAML config to have only unique names.")
         return
 
     while True:
         if check_if_done(out_dir, job.name, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
             if limits_manager:
                 await limits_manager.job_finished()
-            print(f"Job '{job.name}' is finished")
+            print(f"Job {G}'{job.name}'{R} is finished")
             return
         if start_condition_cmd:
             # if start condition is provided, check it first by running it in a shell
             # if it outputs 0 (false), do not start the job and wait and check again, 
             # otherwise, start the job
             if verbose:
-                print(f"Checking start condition of {job.name}...")
+                print(f"Checking start condition of {G}{job.name}{R}...")
             value = int(check_output(start_condition_cmd, shell=True, stderr=stderr))
             if value != 1:
                 if verbose:
-                    print(f"Start condition returned {value}, not starting for {job.name}, retrying again in {check_interval_secs//60} mins.")
+                    print(f"Start condition returned {value}, not starting for {G}{job.name}{R}, retrying again in {check_interval_secs//60} mins.")
                 await asyncio.sleep(check_interval_secs)
                 continue
 
         if existing_job_id is not None:
             if verbose:
-                print(f"Resume {job.name} from job id: {existing_job_id}")
+                print(f"Resume {G}{job.name}{R} from job id: {existing_job_id}")
             job_id = existing_job_id
             existing_job_id = None
             
@@ -123,12 +119,12 @@ async def manage_job(job, limits_manager=None, verbose=0):
             if limits_manager:
                 await limits_manager.wait_for_slot()
                 if verbose:
-                    print(f"Slot available, launching job for {job.name}")
+                    print(f"Slot available, launching job for {G}{job.name}{R}")
             
             # launch job
             try:
                 if verbose:
-                    print(f"Launching a new job for {job.name}")
+                    print(f"Launching a new job for {G}{job.name}{R}")
                 output = check_output(cmd, shell=True, stderr=stderr).decode()
                 # get job id
                 job_id = get_job_id(output)
@@ -136,18 +132,18 @@ async def manage_job(job, limits_manager=None, verbose=0):
                     await limits_manager.job_submitted()
             except CalledProcessError as e:
                 if verbose:
-                    print(f"Error when launching a new job for {job.name}: {e}")
+                    print(f"Error when launching a new job for {G}{job.name}{R}: {e}")
                 job_id = None
             
             if job_id is None:
                 if verbose:
-                    print(f"Cannot find job id for {job.name}")
+                    print(f"Cannot find job id for {G}{job.name}{R}")
                     print(f"Retrying again in {check_interval_secs//60} mins...")
                 await asyncio.sleep(check_interval_secs)
                 continue
 
         if verbose:
-            print(f"Current job id for {job.name}: {job_id}")
+            print(f"Current job id for {G}{job.name}{R}: {P}{job_id}{R}")
         while True:
             # Infinite-loop, check each `check_interval_secs` whether job is present
             # in the queue, then, if present in the queue check if it is still running
@@ -164,11 +160,11 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 if verbose:
                     print(ex)
                 if check_if_done(out_dir, job.name, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
-                    print(f"Job '{job.name}' is finished")
+                    print(f"Job {G}'{job.name}'{R} is finished")
                     return
                 # Job will be relaunched 
                 if verbose:
-                    print(f"Retrying again in {check_interval_secs//60} mins for {job.name}...")
+                    print(f"Retrying again in {check_interval_secs//60} mins for {G}{job.name}{R}...")
                 await asyncio.sleep(check_interval_secs)
                 break
             # if job is not present in the queue, relaunch it directly, except if termination string is found
@@ -176,7 +172,7 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 if limits_manager:
                     await limits_manager.job_finished()
                 if check_if_done(out_dir, job.name, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
-                    print(f"Job '{job.name}' is finished")
+                    print(f"Job {G}'{job.name}'{R} is finished")
                     return
                 # Job will be relaunched directly
                 break
@@ -184,14 +180,14 @@ async def manage_job(job, limits_manager=None, verbose=0):
             data = check_output(cmd_check_job_running.format(job_id=job_id), shell=True, stderr=stderr).decode()
             if str(job_id) in data:
                 # job on running state
-                print(f"Job '{job.name}' is running...(ID:{job_id})")
+                print(f"Job {G}'{job.name}'{R} is running...(ID:{P}{job_id}{R})")
                 if not os.path.exists(out_dir):
                     if verbose:
-                        print(f"Output file not found for {job.name}, waiting...")
+                        print(f"Output file not found for {G}{job.name}{R}, waiting...")
                     await asyncio.sleep(check_interval_secs)
                     continue
                 if verbose:
-                    print(f"Check if the job is freezing for {job.name}...")
+                    print(f"Check if the job is freezing for {G}{job.name}{R}...")
                 # if job is on running state, check the output file
                 output_data_prev = get_file_content(out_dir, job.name)
                 # wait few minutes
@@ -203,8 +199,8 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 # (make sure there are is output before checking)
                 if output_data and output_data_prev and output_data == output_data_prev:
                     if verbose:
-                        print(f"Job frozen for {job.name}, stopping the job then restarting it")
-                    call(f"scancel {job_id}", shell=True)
+                        print(f"Job frozen for {G}{job.name}{R}, stopping the job then restarting it")
+                    call(f"scancel {P}{job_id}{R}", shell=True)
                     if limits_manager:
                         await limits_manager.job_finished()
                     break

@@ -164,7 +164,17 @@ def params_to_args(params: dict) -> list[str]:
     """
     args = []
     for key, value in params.items():
-        flag = f"--{key.replace('_','-')}"
+        # Skip intermediate vars
+        if key.startswith("_"):
+            continue
+        # Weirdly some Megatron args have both hypens and underscores.
+        # Treat those separately, hyphenate all the others.
+        if key == 'override_opt_param_scheduler':
+           flag = f"--override-opt_param-scheduler"
+        elif key == 'use_checkpoint_opt_param_scheduler':
+           flag = f"--use-checkpoint-opt_param-scheduler"
+        else:
+           flag = f"--{key.replace('_','-')}"
         if isinstance(value, bool):
             if value:
                 args.append(flag)
@@ -245,7 +255,7 @@ def resolve_templates_expr(params, verbose=0):
 
 def check_unresolved_placeholders(params):
     """
-    Check for unresolved placeholders like {var} in parameter values.
+    Check for unresolved placeholders like {var} in config parameter values.
     """
     unresolved = {
         k: v for k, v in params.items()
@@ -256,6 +266,14 @@ def check_unresolved_placeholders(params):
       raise ValueError(f"Cannot resolve YAML at placeholders: {unresolved}")
 
 
+def check_unresolved_in_tpl(tpl):
+    """Raise if sbatch template still has unresolved {var} (not ${var})."""
+    unresolved = re.findall(r"(?<!\$)\{[^{}]+\}", tpl)
+    if unresolved:
+        raise ValueError(
+            f"Unresolved placeholders in sbatch template: {unresolved}"
+        )
+
 def render_tpl(tpl, params):
    """Replace {var} placeholders without touching ${var}."""
    placeholders = {m[1] for m in re.finditer(r"\{(\w+)\}", tpl)}
@@ -265,17 +283,35 @@ def render_tpl(tpl, params):
    return tpl
  
 
+def _prepend_section_to_values(cfg):
+    """
+    For each section in PREFIXES (e.g. autoexp, slurm, args),
+    find placeholders like {var} in its string values and rewrite
+    them as {section.var} — unless they already contain a dot.
+    """
+    for prefix in PREFIXES:
+        section = cfg[prefix]
+        updated = {}
+        for k, v in section.items():
+            if isinstance(v, str):
+                for m in re.findall(r"\{([^{}]+)\}", v):  # find {ANYTHING}
+                    if "." not in m:  # skip already qualified
+                        v = v.replace(f"{{{m}}}", f"{{{prefix}.{m}}}")
+            updated[k] = v
+        cfg[prefix] = DictConfig(updated)
+    return cfg
+
+
 def generate_job_defs(cfg, verbose=0):
    """
    Returns a list of JobDef from a config file (config.yaml)
    the JobDef list can directly be used by the manager to schedule/manage the jobs
    """
    jobs = []
-   
-   # Resolve template placeholders in each section.
-   for prefix in PREFIXES:
-      cfg[prefix] = resolve_templates_expr(cfg[prefix], verbose)
-   
+
+   # Ensure placeholders specify the corresponding section name.
+   cfg = _prepend_section_to_values(cfg)
+
    # We split the config in two parts:
    # - experiments part, to be resolved into multiple experiments
    # - autoexp and template part, which does not need expansion
@@ -328,10 +364,9 @@ def generate_job_defs(cfg, verbose=0):
       # Render templated sbatch script.
       tpl = open(grouped_params['autoexp']['template']).read()
       tpl = render_tpl(tpl, grouped_params['slurm'])
-      megatron_args = params_to_args(grouped_params['args'])
-      # megatron_args = " \\\n    ".join(params_to_args(grouped_params['args']))
       megatron_args = " ".join(params_to_args(grouped_params['args']))
       tpl = tpl.replace("{megatron_args}", f'"{megatron_args}"')
+      check_unresolved_in_tpl(tpl)
 
       # auto generate the name of the job from the full set of params
       # if 'name' is not present in 'params', otherwise just use the value of 'name'

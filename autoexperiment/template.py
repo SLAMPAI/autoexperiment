@@ -4,7 +4,6 @@ from omegaconf import DictConfig, ListConfig
 from itertools import product
 from dataclasses import dataclass, fields
 from collections import defaultdict
-import warnings
 
 
 @dataclass
@@ -314,7 +313,7 @@ def generate_job_defs(cfg, verbose=0):
 
    # We split the config in two parts:
    # - experiments part, to be resolved into multiple experiments
-   # - autoexp and template part, which does not need expansion
+   # - autoexp and template part, which do not need expansion
    exp_cfg = cfg.pop('experiments', {})
    
    # Flatten one part of the config, prepend section names to keys.
@@ -323,10 +322,17 @@ def generate_job_defs(cfg, verbose=0):
       for k, v in cfg.pop(prefix, {}).items():
             flat_cfg[f'{prefix}.{k}'] = v
    if not cfg.is_empty:
-      raise ValueError('Invalid configuration provided.')
+      raise ValueError('Invalid configuration sections.')
+
+   if exp_cfg:
+      exp_combinations = product_recursive(exp_cfg)
+   else:
+      # No experiments section — just a single empty dict
+      exp_combinations = [{}]
 
    # For each combination of experiments config, we create a separate job.
-   for vals in product_recursive(exp_cfg):
+   # for vals in product_recursive(exp_cfg):   
+   for vals in exp_combinations:
       # params will store the key-value pairs of all the variables that can be used in the template
       params = {}
       for ks, v in vals.items():

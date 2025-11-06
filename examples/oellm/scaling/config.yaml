@@ -8,23 +8,29 @@
 
 autoexp:
 
-    # A folder for this example. Make sure the subfolders exist.
-    folder: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/oellm_sweep"
-    templates: "{folder}/templates"
-    cluster: "{folder}/cluster"
-    helpers: "{folder}/helpers"
-    logs: "{folder}/logs"
-    ckpts: "{logs}/checkpoints"
+    # Helpers and cluster setup.
+    oellm_folder: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/oellm"
+    helpers: "{oellm_folder}/helpers"
+    cluster: "{oellm_folder}/cluster"
+
+    # Output folder. For this example we write in this folder.
+    out_folder: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/oellm/scaling"
+    logs: "{out_folder}/logs"
+    ckpts: "{out_folder}/ckpts"
+    scripts: "{out_folder}/sbatch"
 
     # Templated sbatch.
-    template: "{templates}/train.sbatch"
+    template: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/oellm/scaling/train.sbatch"
 
-    # Destination script and command.
-    sbatch_script: "{folder}/generated/{name}.sbatch"
+    # Destination for sbatch script and command to execute.
+    sbatch_script: "{scripts}/{name}.sbatch"
     cmd: "sbatch {sbatch_script}"
 
-    # A unique name.
-    name: "test3_lr{args.lr}_iters{args.train_iters}"
+    # A base name common to all experiments.
+    base_name: "test3_lr{args.lr}"
+
+    # A unique name, we define it in the experiments section.
+    name: ""
 
     # Termination cmd.
     termination_cmd: "{helpers}/finished_train.py {logs} {slurm.job_name}"
@@ -37,6 +43,7 @@ slurm:
 
     job_name: "{autoexp.name}"
     out_dir: "{autoexp.logs}"
+    ckpt_dir: "{autoexp.ckpts}"
 
     account: "AIFAC_L01_028"
     partition: boost_usr_prod
@@ -47,24 +54,13 @@ slurm:
 
 ###############################################################
 # MEGATRON ARGS.
-# Variable starting with `_` are intermediate variables.
-# All the other args are concatenated and passed verbatim to Megatron-LM.
-# If you want to sweep over some vars, move them to `experiments` section.
+# These args are concatenated and passed verbatim to Megatron-LM.
 
 args:
 
     # wandb name
     wandb_exp_name: "{autoexp.name}"
     wandb_project: oellm-train
-
-    # TOKENS
-    _tokens: 204800
-    train_iters: "expr(({_tokens} + {seq_length} * {global_batch_size} - 1) // ({seq_length} * {global_batch_size}))"
-
-    # LR DECAY
-    _lr_decay_fraction: 0.2
-    lr_decay_iters: "expr(int({train_iters} * {_lr_decay_fraction}))"
-    lr_wsd_decay_iters: "expr(int({train_iters} * {_lr_decay_fraction}))"
 
     # DATA
     data_path: [
@@ -77,15 +73,15 @@ args:
     ]
     seq_length: 2048
     max_position_embeddings: 2048
-    micro_batch_size: 25
-    global_batch_size: 100
+    micro_batch_size: 10
+    global_batch_size: 40
     vocab_file: "/leonardo_work/AIFAC_L01_028/najroldi/models/EleutherAI/gpt-neox-20b/vocab.json"
     merge_file: "/leonardo_work/AIFAC_L01_028/najroldi/models/EleutherAI/gpt-neox-20b/merges.txt"
     num_workers: 8
     split: '99,1,0'
 
-    # MODEL: 10M
-    num_layers: 5
+    # MODEL
+    num_layers: 1
     hidden_size: 160
     ffn_hidden_size: 640
     num_attention_heads: 4
@@ -107,10 +103,13 @@ args:
     attention_softmax_in_fp32: False
     disable_bias_linear: True
 
-    # these args substantially improve TFLOP/s/GPU (1.7B model on 54 nodes, 160 vs 140 with vs without)
-    overlap_param_gather: True
-    overlap_grad_reduce: True
-    overlap_param_gather_with_optimizer_step: False # with interleaved pipeline parallelism
+    # these args substantially improve TFLOP/s/GPU
+    # TODO: fix, somehow I cannot resume with these args
+    # use_distributed_optimizer: True
+    # overlap-param-gather: True
+    # overlap_grad_reduce: True
+    # overlap_param_gather_with_optimizer_step: False # with interleaved pipeline parallelism
+    # num_layers_per_virtual_pipeline_stage: null # interleaved pipeline scheduling is only possible with pipeline parallel degree > 1.
 
     # TRAINING, PARALLELISM
     recompute_activations: False
@@ -120,8 +119,6 @@ args:
     context_parallel_size: 1
     sequence_parallel: True
 
-    # num_layers_per_virtual_pipeline_stage: null # interleaved pipeline scheduling is only possible with pipeline parallel degree > 1.
-    use_distributed_optimizer: True
 
     distributed_backend: nccl
     distributed_timeout_minutes: 10
@@ -156,7 +153,7 @@ args:
 
     # Set CHECKPOINT_FORMAT
     ckpt_format: "torch" # "torch_dist" is currently bugged
-    save_interval: 10
+    save_interval: 1
 
 
 ###############################################################
@@ -164,12 +161,35 @@ args:
 # This allows to easily distinguish between megatron args, slurm args, and intermediate variables.
 
 experiments:
-    args.lr: [1.e-2, 1.e-1]
+    args.lr: [1.e-3, 1.e-4]
 
-    duration:
-        - short:
-            args._tokens: 204800 # one iteration
-            args.log_interval: 1
-        - long:
-            args._tokens: 2048000 # 10 iterations
-            args.log_interval: 2
+    phase:
+        - pretrain:
+            # Stable LR
+            autoexp.name: "{autoexp.base_name}_stable"
+            args.train_iters: 20
+            args.lr_warmup_iters: 5
+            args.lr_wsd_decay_iters: 0
+
+        - cooldown:
+            # LR Decay
+            autoexp.name: "{autoexp.base_name}_decay{args.train_iters}"
+            cd_scale:
+                - 10iters:
+                    args.train_iters: 10
+                - 20iters:
+                    args.train_iters: 20
+
+            # Cooldown 20%, start training at 80% of train_iters
+            decay_fraction: 0.2
+            start_iter: "expr(int({args.train_iters} * (1 - {decay_fraction})))"
+
+            # Decay iterations
+            args.lr_wsd_decay_iters: "expr(int({args.train_iters} * {decay_fraction}))"
+
+            # Override the LR scheduler
+            args.override_opt_param_scheduler: True
+
+            # Start when the stable LR training has reached start_iter
+            autoexp.start_condition_cmd: "{autoexp.helpers}/pending_cooldown.py \
+                {autoexp.ckpts} {autoexp.base_name}_stable {autoexp.name} {start_iter}"

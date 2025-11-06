@@ -8,19 +8,22 @@
 
 autoexp:
 
-    # A folder for this example. Make sure the subfolders exist.
-    folder: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/oellm_sweep"
-    templates: "{folder}/templates"
-    cluster: "{folder}/cluster"
-    helpers: "{folder}/helpers"
-    logs: "{folder}/logs"
-    ckpts: "{logs}/checkpoints"
+    # Helpers and cluster setup.
+    oellm_folder: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/oellm"
+    helpers: "{oellm_folder}/helpers"
+    cluster: "{oellm_folder}/cluster"
+
+    # Output folder. For this example we write in this folder.
+    out_folder: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/oellm/sweep"
+    logs: "{out_folder}/logs"
+    ckpts: "{out_folder}/ckpts"
+    scripts: "{out_folder}/sbatch"
 
     # Templated sbatch.
-    template: "{templates}/train.sbatch"
+    template: "/leonardo/home/userexternal/najroldi/oellm/dev/autoexperiment/examples/oellm/sweep/train.sbatch"
 
-    # Destination script and command.
-    sbatch_script: "{folder}/generated/{name}.sbatch"
+    # Destination for sbatch script and command to execute.
+    sbatch_script: "{scripts}/{name}.sbatch"
     cmd: "sbatch {sbatch_script}"
 
     # A unique name.
@@ -37,6 +40,7 @@ slurm:
 
     job_name: "{autoexp.name}"
     out_dir: "{autoexp.logs}"
+    ckpt_dir: "{autoexp.ckpts}"
 
     account: "AIFAC_L01_028"
     partition: boost_usr_prod
@@ -168,8 +172,8 @@ experiments:
 
     duration:
         - short:
-            args._tokens: 204800 # one iteration
+            args._tokens: 2048000 # 10 iteration
             args.log_interval: 1
         - long:
-            args._tokens: 2048000 # 10 iterations
+            args._tokens: 20480000 # 100 iterations
             args.log_interval: 2

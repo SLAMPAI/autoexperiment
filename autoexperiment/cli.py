@@ -42,7 +42,7 @@ def _assert_job_name(config:str, name:str):
     if f"#SBATCH --job-name={name}" not in config:
         raise ValueError("Please add #SBATCH --job-name={name} to your sbatch templates")
 
-def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:('f', multi())):
+def run(config, *params, filter_cmd:str=None, dry=False, verbose=1, max_jobs:int=None, fix:('f', multi())):
     """
     Manage/schedule jobs corresponding to a config file after
     having generated the sbatch scripts.
@@ -68,6 +68,8 @@ def run(config, *params, dry=False, verbose=1, max_jobs:int=None, fix:('f', mult
             key, value = param.split("=")
             params_dict[key] = value.split(",")
         jobdefs = [jobdef for jobdef in jobdefs if all(str(jobdef.params.get(k)) in vs for k, vs in params_dict.items())]
+    if filter_cmd:
+        jobdefs = [jobdef for jobdef in jobdefs if os.system(filter_cmd.format(**jobdef.params)) == 0]
     if dry:
         for jobdef in jobdefs:
             print(jobdef.params["name"])

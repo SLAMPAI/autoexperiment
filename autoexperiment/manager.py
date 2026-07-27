@@ -79,10 +79,11 @@ async def manage_job(job, limits_manager=None, verbose=0):
         # TODO can fail if different autoexp sessions use same names, one must ensure that it is not the case!
         print(f"Found duplicate jobs with same name: '{job.name}': {job_ids}. Please fix your YAML config to have only unique names.")
         return
-
+    attempts = 0
+    job_id = None
     while True:
         if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
-            if limits_manager:
+            if limits_manager and job_id is not None:
                 await limits_manager.job_finished()
             print(f"Job '{job.name}' is finished")
             return
@@ -94,6 +95,11 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 print(f"Checking start condition of {job.name}...")
             value = int(check_output(start_condition_cmd, shell=True, stderr=stderr))
             if value != 1:
+                attempts += 1
+                if attempts >= job.max_start_attempts:
+                    if verbose:
+                        print(f"Max number of attempts achieved, will not try again to start the job.")
+                    return
                 if verbose:
                     print(f"Start condition returned {value}, not starting for {job.name}, retrying again in {check_interval_secs//60} mins.")
                 await asyncio.sleep(check_interval_secs)
@@ -114,11 +120,13 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 await limits_manager.wait_for_slot()
                 if verbose:
                     print(f"Slot available, launching job for {job.name}")
-            
             # launch job
             try:
                 if verbose:
                     print(f"Launching a new job for {job.name}")
+                if job.dry:
+                    print(job.params["name"])
+                    return
                 output = check_output(cmd, shell=True, stderr=stderr).decode()
                 # get job id
                 job_id = get_job_id(output)
@@ -154,6 +162,8 @@ async def manage_job(job, limits_manager=None, verbose=0):
                 if verbose:
                     print(ex)
                 if check_if_done(output_file, termination_str=termination_str, termination_cmd=termination_cmd, verbose=verbose):
+                    if limits_manager:
+                        await limits_manager.job_finished()
                     print(f"Job '{job.name}' is finished")
                     return
                 # Job will be relaunched 
